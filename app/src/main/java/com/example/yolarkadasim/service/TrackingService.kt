@@ -36,6 +36,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
     private var locationCallback: LocationCallback? = null
 
     private var selectedRoute: BusRoute? = null
+    private var startStopIndex: Int = -1
     private var destinationIndex: Int = -1
     private var stopLats: DoubleArray? = null
     private var stopLons: DoubleArray? = null
@@ -46,8 +47,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
     private var lastAnnouncedLeavingPreDest = false
     private var hasAnnouncedTargetReminder = false
     private var hasAnnouncedArrival = false
+    private var isStartStopConfirmed = false
+    private var startStopDetectionCount = 0
 
-    var onUpdate: ((Double, Double, Int, Double, Int, Double) -> Unit)? = null
+    var onUpdate: ((Double, Double, Int, Double, Int, Double, Int) -> Unit)? = null
 
     companion object {
         private const val CHANNEL_ID = "tracking_channel"
@@ -100,8 +103,46 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         lastAnnouncedLeavingPreDest = false
         hasAnnouncedTargetReminder = false
         hasAnnouncedArrival = false
+        isStartStopConfirmed = false
+        startStopDetectionCount = 0
+
+        // Initial detection
+        detectStartStop()
 
         beginLocationUpdates()
+    }
+
+    private fun detectStartStop() {
+        val lats = stopLats ?: return
+        val lons = stopLons ?: return
+        try {
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                if (loc != null) {
+                    val detectedIdx = findNearestStopIndex(loc.latitude, loc.longitude, lats, lons, -1)
+                    val route = selectedRoute ?: return@addOnSuccessListener
+                    
+                    val distToStop = calculateDistance(loc.latitude, loc.longitude, lats[detectedIdx], lons[detectedIdx])
+                    val stopName = route.stops[detectedIdx].name
+
+                    if (distToStop <= 35.0) {
+                        // User is effectively AT the stop
+                        startStopIndex = detectedIdx
+                        isStartStopConfirmed = true
+                        val totalStops = Math.abs(destinationIndex - startStopIndex)
+                        speak("${stopName} durağından biniş algılandı. Hedefinize ${totalStops} durak kaldı.")
+                    } else {
+                        // User is NEAR but not AT the stop
+                        startStopIndex = detectedIdx
+                        isStartStopConfirmed = false // Will wait for movement or closer approach
+                        val totalStops = Math.abs(destinationIndex - startStopIndex)
+                        speak("En yakın biniş durağı: ${stopName}. Lütfen durağa gidiniz. Yolculuğunuz ${totalStops} durak sürecek.")
+                    }
+                    startStopDetectionCount = 1
+                }
+            }
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Permission error in detectStartStop", e)
+        }
     }
 
     fun stopTracking() {
@@ -110,17 +151,50 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         stopSelf()
     }
 
+    private var currentInterval = 5000L
+
     private fun beginLocationUpdates() {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, currentInterval)
+            .setMinUpdateDistanceMeters(0f)
+            .build()
+        
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
-                result.lastLocation?.let { processLocation(it.latitude, it.longitude) }
+                val location = result.lastLocation ?: return
+                processLocation(location.latitude, location.longitude)
+                adjustSamplingRate(location.speed) // Speed is in m/s
             }
         }
+        
         try {
             fusedLocationClient.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
         } catch (e: SecurityException) {
             Log.e(TAG, "Location permission missing", e)
+        }
+    }
+
+    /**
+     * Dynamically adjusts GPS sampling based on speed (m/s).
+     * Stationary/Walking (< 2 m/s): 7 seconds
+     * City Driving (2-15 m/s): 4 seconds
+     * Fast Driving (> 15 m/s): 2 seconds
+     */
+    private fun adjustSamplingRate(speed: Float) {
+        val newInterval = when {
+            speed < 2.0f -> 7000L  // ~7.2 km/h (Stationary or slow walk)
+            speed < 15.0f -> 4000L // ~54 km/h (Normal city traffic)
+            else -> 2000L          // High speed
+        }
+
+        if (newInterval != currentInterval) {
+            currentInterval = newInterval
+            Log.d(TAG, "Adjusting GPS interval to: $currentInterval ms (Speed: $speed m/s)")
+            
+            // Restart updates with new interval
+            locationCallback?.let {
+                fusedLocationClient.removeLocationUpdates(it)
+                beginLocationUpdates()
+            }
         }
     }
 
@@ -131,6 +205,24 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
 
         val curIdx = findNearestStopIndex(lat, lon, lats, lons, prevIdx)
         if (curIdx < 0) return
+
+        // --- Start Stop Refinement (Catch-up) ---
+        // If we just started (within first 3 updates), verify if we moved significantly
+        // or if we've arrived at our first stop properly.
+        if (!isStartStopConfirmed && startStopDetectionCount < 5) {
+            val distToDetectedStart = calculateDistance(lat, lon, lats[startStopIndex], lons[startStopIndex])
+            // If we are very close to the assumed start stop (<= 30m), confirm it.
+            if (distToDetectedStart <= 30.0) {
+                isStartStopConfirmed = true
+                Log.d(TAG, "Start stop confirmed at index: $startStopIndex")
+            } else if (curIdx != startStopIndex && startStopDetectionCount > 1) {
+                // If we've already jumped to a new stop very quickly, our initial start was likely wrong
+                startStopIndex = curIdx
+                isStartStopConfirmed = true
+                Log.d(TAG, "Start stop corrected to: $startStopIndex")
+            }
+            startStopDetectionCount++
+        }
 
         val deviation = calculatePolylineDeviation(lat, lon, lats, lons, curIdx)
         val direction = checkRouteDirection(curIdx, prevIdx, destinationIndex)
@@ -143,8 +235,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
             distToNext = calculateDistance(lat, lon, ns.lat, ns.lon)
         }
 
-        // Notify activity (added distToNext)
-        onUpdate?.invoke(lat, lon, curIdx, deviation, direction, distToNext)
+        // Notify activity (added distToNext and startStopIndex)
+        onUpdate?.invoke(lat, lon, curIdx, deviation, direction, distToNext, startStopIndex)
 
         // Navigation Logic & TTS
         val nextIdx = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1

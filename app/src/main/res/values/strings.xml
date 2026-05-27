@@ -66,6 +66,7 @@
 
     <!-- Modern UI -->
     <string name="mode_modern">MODERN MOD</string>
+    <string name="mode_easy">KOLAY MOD</string>
     <string name="label_route">GÜZERGAH</string>
     <string name="route_not_selected">Henüz Seçilmedi</string>
     <string name="btn_change">DEĞİŞTİR</string>
@@ -77,4 +78,10 @@
     <string name="notif_title_tracking">Yolculuk Takip Ediliyor</string>
     <string name="notif_content_init">Konum bekleniyor…</string>
     <string name="notif_next_stop">Sıradaki: %1$s (%2$dm)</string>
+
+    <!-- Voice Commands -->
+    <string name="cd_mic_button">Sesli komut ver</string>
+    <string name="tts_listening">Dinliyorum, komutunuzu söyleyin</string>
+    <string name="tts_command_not_understood">Anlaşılamadı, lütfen tekrar söyleyin</string>
+    <string name="tts_info_not_tracking">Takip aktif değil, önce bir durak seçip takibi başlatın</string>
 </resources>

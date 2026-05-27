@@ -44,11 +44,13 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
     
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+    private var isEasyMode = false
 
     companion object {
-        fun newInstance(routes: List<BusRoute>): RouteSelectionDialog {
+        fun newInstance(routes: List<BusRoute>, isEasyMode: Boolean = false): RouteSelectionDialog {
             return RouteSelectionDialog().also {
                 it.routes = routes
+                it.isEasyMode = isEasyMode
             }
         }
     }
@@ -69,6 +71,13 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         if (status == TextToSpeech.SUCCESS) {
             tts?.setLanguage(Locale("tr", "TR"))
             isTtsReady = true
+            
+            // Auto guidance on open
+            if (isEasyMode) {
+                if (selectedRoute == null) {
+                    speak("Hat seçme ekranı açıldı. Listeden istediğiniz otobüs hattını seçin. İsimleri duymak için sağdaki küçük hoparlörlere basabilirsiniz.")
+                }
+            }
         }
     }
 
@@ -169,6 +178,11 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         btnBack.visibility = View.VISIBLE
         btnBack.text = "← GERİ"
         layoutRecentDest.visibility = View.GONE
+
+        // Guidance for stop list
+        if (isEasyMode) {
+            speak("${route.routeId} numaralı hattın durakları listelendi. Lütfen ineceğiniz durağı seçin.")
+        }
 
         val favStops = favoritesStore.getFavoriteStopsForRoute(route.routeId)
         
