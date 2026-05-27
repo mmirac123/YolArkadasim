@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/surface_dark"
+    android:padding="20dp">
+
+    <!-- Dialog Title -->
+    <TextView
+        android:id="@+id/textDialogTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/select_route_title"
+        android:textColor="@color/text_primary"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:paddingVertical="16dp"
+        android:accessibilityLiveRegion="polite" />
+
+    <!-- Divider -->
+    <com.google.android.material.divider.MaterialDivider
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:dividerColor="@color/divider" />
+
+    <!-- Back button (visible in step 2: stop selection) -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnDialogBack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/dialog_back"
+        android:textColor="@color/accent_blue"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:minHeight="56dp"
+        android:contentDescription="@string/cd_back_button"
+        android:visibility="gone"
+        style="@style/Widget.Material3.Button.TextButton"
+        tools:visibility="visible" />
+
+    <!-- ══ Recent Destination shortcut (pinned above the list) ══ -->
+    <LinearLayout
+        android:id="@+id/layoutRecentDest"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="12dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <!-- Section label -->
+        <TextView
+            android:id="@+id/textRecentDestLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/recent_dest_label"
+            android:textColor="@color/recent_dest_amber"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:letterSpacing="0.08"
+            android:paddingHorizontal="4dp"
+            android:paddingBottom="6dp"
+            android:importantForAccessibility="no" />
+
+        <!-- Tappable card -->
+        <LinearLayout
+            android:id="@+id/cardRecentDest"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_recent_destination"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="18dp"
+            android:minHeight="80dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:foreground="?attr/selectableItemBackground">
+
+            <!-- Star badge -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="56dp"
+                android:gravity="center"
+                android:text="★"
+                android:textColor="@color/surface_dark"
+                android:textSize="24sp"
+                android:textStyle="bold"
+                android:background="@drawable/bg_badge_amber"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="8dp"
+                android:importantForAccessibility="no" />
+
+            <!-- Stop name + route context -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/textRecentDestName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textColor="@color/text_primary"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:fontFamily="sans-serif"
+                    tools:text="Ümitköy Metro" />
+
+                <TextView
+                    android:id="@+id/textRecentDestRoute"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="@color/recent_dest_amber"
+                    android:textSize="16sp"
+                    android:fontFamily="sans-serif"
+                    tools:text="Hat 521" />
+            </LinearLayout>
+
+            <!-- Arrow -->
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="›"
+                android:textColor="@color/recent_dest_amber"
+                android:textSize="32sp"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:importantForAccessibility="no" />
+
+        </LinearLayout>
+
+        <!-- Divider below the recent destination card -->
+        <com.google.android.material.divider.MaterialDivider
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:dividerColor="@color/divider" />
+
+    </LinearLayout>
+
+    <!-- Scrollable list of routes / stops -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerOptions"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="8dp"
+        android:clipToPadding="false"
+        android:paddingBottom="16dp"
+        tools:listitem="@layout/item_route_option" />
+
+</LinearLayout>

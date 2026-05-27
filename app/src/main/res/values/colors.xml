@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- Modern dark palette — WCAG AAA contrast (≥7:1)         -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+
+    <!-- Primary: Deep navy tones for backgrounds -->
+    <color name="primary_dark">#FF152231</color>
+    <color name="primary">#FF1E3048</color>
+
+    <!-- Accent green: Tracking active / positive state -->
+    <color name="accent_green">#FF00E676</color>
+    <color name="accent_green_dark">#FF00C853</color>
+    <color name="accent_green_ripple">#5500E676</color>
+    <color name="accent_green_surface">#1A00E676</color>
+
+    <!-- Accent red: Stop / danger state -->
+    <color name="accent_red">#FFFF5252</color>
+    <color name="accent_red_dark">#FFD50000</color>
+    <color name="accent_red_ripple">#55FF5252</color>
+    <color name="accent_red_surface">#1AFF5252</color>
+
+    <!-- Accent blue: Selection, route badges, links -->
+    <color name="accent_blue">#FF64B5F6</color>
+    <color name="accent_blue_dark">#FF42A5F5</color>
+    <color name="accent_blue_ripple">#5564B5F6</color>
+    <color name="accent_blue_surface">#1A64B5F6</color>
+
+    <!-- Warning amber: Wrong direction indication -->
+    <color name="warning_amber">#FFFFD600</color>
+    <color name="warning_amber_surface">#1AFFD600</color>
+
+    <!-- Recent destination: Warm amber/orange accent -->
+    <color name="recent_dest_amber">#FFFFAB40</color>
+    <color name="recent_dest_amber_dark">#FFFF9100</color>
+    <color name="recent_dest_surface">#1AFFAB40</color>
+    <color name="recent_dest_ripple">#55FFAB40</color>
+
+    <!-- Text: Maximum contrast on dark backgrounds -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#B3E0E0E0</color>
+    <color name="text_disabled">#66AAAAAA</color>
+
+    <!-- Surfaces: Layered dark backgrounds -->
+    <color name="surface_dark">#FF0F1923</color>
+    <color name="surface_card">#FF1A2634</color>
+    <color name="surface_card_elevated">#FF243447</color>
+    <color name="surface_elevated">#FF2C3E54</color>
+    <color name="divider">#1AFFFFFF</color>
+
+    <!-- Header gradient -->
+    <color name="gradient_start">#FF1E3A5F</color>
+    <color name="gradient_end">#FF0F1923</color>
+
+    <!-- Status bar -->
+    <color name="status_bar">#FF0A1420</color>
+
+    <!-- Legacy colors kept for compatibility -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

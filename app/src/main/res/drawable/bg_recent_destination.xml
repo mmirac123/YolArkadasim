@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Warm amber card background with rounded corners for the "Son Hedef" card.
+     Uses a 2dp stroke for clear visual separation from regular list items. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/recent_dest_surface" />
+    <stroke
+        android:width="2dp"
+        android:color="@color/recent_dest_amber" />
+    <corners android:radius="16dp" />
+</shape>

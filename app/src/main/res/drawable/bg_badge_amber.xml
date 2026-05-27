@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Amber-tinted badge background for the star icon in the "Son Hedef" card. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/recent_dest_amber" />
+    <corners android:radius="12dp" />
+</shape>

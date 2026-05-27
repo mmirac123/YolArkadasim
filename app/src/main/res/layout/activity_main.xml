@@ -1,0 +1,516 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/surface_dark"
+    tools:context=".MainActivity">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- HEADER: Title and Mode Switcher                              -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layoutHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp"
+        android:paddingBottom="20dp"
+        android:background="@drawable/bg_header_gradient"
+        android:elevation="6dp"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextView
+            android:id="@+id/textAppTitle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/app_name"
+            android:textColor="@color/text_primary"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:fontFamily="sans-serif-medium"
+            android:importantForAccessibility="yes"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switchUiMode"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:text="@string/mode_modern"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp"
+            android:contentDescription="@string/cd_mode_switch"
+            android:thumbTint="@color/accent_blue"
+            app:trackTint="@color/primary"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- ACCESSIBILITY UI: Elderly / Visually Impaired Optimized      -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layoutAccessibility"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:padding="20dp"
+        android:visibility="visible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layoutHeader">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSelectDestination"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/select_destination"
+            android:textColor="@color/text_primary"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:minHeight="80dp"
+            android:contentDescription="@string/cd_select_destination"
+            app:backgroundTint="@color/primary"
+            app:cornerRadius="20dp"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
+
+        <LinearLayout
+            android:id="@+id/layoutRouteInfo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="vertical"
+            android:padding="16dp"
+            android:background="@drawable/bg_card_rounded"
+            android:elevation="2dp"
+            android:visibility="gone"
+            android:importantForAccessibility="yes"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/btnSelectDestination"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/textDestinationInfo"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                tools:text="Hedef: Ümitköy Metro" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/status_idle"
+            android:textColor="@color/text_secondary"
+            android:textSize="18sp"
+            android:accessibilityLiveRegion="polite"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/layoutRouteInfo" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnToggleTracking"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:text="@string/btn_start_tracking"
+            android:textColor="@color/surface_dark"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            android:contentDescription="@string/cd_tracking_button"
+            app:backgroundTint="@color/accent_green"
+            app:cornerRadius="32dp"
+            app:layout_constraintBottom_toTopOf="@id/layoutTripInfo"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/textStatus"
+            app:layout_constraintVertical_bias="0.4"
+            app:layout_constraintHeight_percent="0.32"
+            app:layout_constraintWidth_percent="0.8" />
+
+        <LinearLayout
+            android:id="@+id/layoutTripInfo"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="24dp"
+            android:orientation="vertical"
+            android:padding="20dp"
+            android:background="@drawable/bg_card_rounded"
+            android:elevation="2dp"
+            android:visibility="gone"
+            android:importantForAccessibility="yes"
+            app:layout_constraintBottom_toTopOf="@id/textDirectionStatus"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/textNextStop"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold"
+                android:accessibilityLiveRegion="polite"
+                tools:text="Sıradaki: Harikalar Diyarı" />
+
+            <TextView
+                android:id="@+id/textDistanceToNext"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="18sp"
+                tools:text="Mesafe: 450 m" />
+
+            <TextView
+                android:id="@+id/textRemainingStops"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="18sp"
+                tools:text="Kalan Durak: 5" />
+
+            <TextView
+                android:id="@+id/textDeviation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/warning_amber"
+                android:textSize="14sp"
+                tools:text="Sapma: 0 m" />
+
+            <TextView
+                android:id="@+id/textCoordinates"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:alpha="0.5"
+                android:importantForAccessibility="no"
+                tools:text="39.9, 32.7" />
+
+            <TextView
+                android:id="@+id/textGpsAccuracyWarning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:padding="8dp"
+                android:background="@drawable/bg_gps_warning"
+                android:textColor="@color/warning_amber"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                android:accessibilityLiveRegion="polite"
+                android:contentDescription="@string/cd_gps_accuracy_warning"
+                tools:text="⚠ GPS sinyali zayıf (45 m)"
+                tools:visibility="visible" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textDirectionStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            android:text=""
+            android:textColor="@color/accent_green"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:accessibilityLiveRegion="assertive"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- MODERN UI: Standard User Optimized                          -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layoutModern"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:padding="16dp"
+        android:visibility="gone"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/layoutHeader">
+
+        <!-- Top Destination Selector Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardModernSelector"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="@string/cd_route_card"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="4dp"
+            app:strokeWidth="1.5dp"
+            app:strokeColor="@color/accent_blue_surface"
+            app:layout_constraintTop_toTopOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="20dp">
+
+                <ImageView
+                    android:id="@+id/iconModernBus"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@android:drawable/ic_dialog_map"
+                    android:contentDescription="@string/cd_bus_icon"
+                    android:background="@drawable/bg_badge_rounded"
+                    android:padding="8dp"
+                    app:tint="@color/white"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <TextView
+                    android:id="@+id/labelModernRoute"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:text="NEREYE GİDİYORSUN?"
+                    android:textSize="11sp"
+                    android:textColor="@color/accent_blue"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.15"
+                    android:importantForAccessibility="no"
+                    app:layout_constraintStart_toEndOf="@id/iconModernBus"
+                    app:layout_constraintTop_toTopOf="@id/iconModernBus" />
+
+                <TextView
+                    android:id="@+id/textModernRouteName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="Durak seçmek için dokunun"
+                    android:textSize="18sp"
+                    android:textColor="@color/text_primary"
+                    android:textStyle="bold"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="@id/labelModernRoute"
+                    app:layout_constraintTop_toBottomOf="@id/labelModernRoute" />
+
+                <com.google.android.material.divider.MaterialDivider
+                    android:id="@+id/dividerModern"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    app:dividerColor="@color/divider"
+                    app:layout_constraintTop_toBottomOf="@id/textModernRouteName" />
+
+                <TextView
+                    android:id="@+id/btnModernSelectAction"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:minHeight="48dp"
+                    android:gravity="center"
+                    android:text="DEĞİŞTİR"
+                    android:textColor="@color/accent_blue"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:importantForAccessibility="no"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toBottomOf="@id/dividerModern" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Tracking Control Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnModernToggle"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginTop="24dp"
+            android:text="TAKİBİ BAŞLAT"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:contentDescription="@string/cd_tracking_button"
+            app:cornerRadius="16dp"
+            app:backgroundTint="@color/accent_green"
+            app:icon="@android:drawable/ic_media_play"
+            app:iconGravity="textStart"
+            app:layout_constraintTop_toBottomOf="@id/cardModernSelector" />
+
+        <!-- Live Status Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/cardModernTripInfo"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:visibility="gone"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="6dp"
+            app:layout_constraintTop_toBottomOf="@id/btnModernToggle"
+            tools:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:id="@+id/textModernNextStopLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="SIRADAKİ DURAK"
+                    android:textSize="11sp"
+                    android:textColor="@color/accent_blue"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.15"
+                    android:importantForAccessibility="no" />
+
+                <TextView
+                    android:id="@+id/textModernNextStopName"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="..."
+                    android:textSize="22sp"
+                    android:textColor="@color/text_primary"
+                    android:textStyle="bold"
+                    android:accessibilityLiveRegion="polite" />
+
+                <com.google.android.material.progressindicator.LinearProgressIndicator
+                    android:id="@+id/progressModernTrip"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:contentDescription="@string/cd_trip_progress"
+                    app:trackThickness="10dp"
+                    app:trackCornerRadius="5dp"
+                    app:indicatorColor="@color/accent_blue"
+                    app:trackColor="@color/surface_elevated"
+                    android:progress="0" />
+
+                <GridLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:columnCount="2"
+                    android:rowCount="2">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/label_distance"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end"
+                        android:text="@string/label_stops"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_secondary" />
+
+                    <TextView
+                        android:id="@+id/textModernDistValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="0 m"
+                        android:textSize="20sp"
+                        android:textColor="@color/text_primary"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/textModernRemainingValue"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end"
+                        android:layout_marginTop="2dp"
+                        android:text="0"
+                        android:textSize="20sp"
+                        android:textColor="@color/text_primary"
+                        android:textStyle="bold" />
+                </GridLayout>
+
+                <com.google.android.material.divider.MaterialDivider
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    app:dividerColor="@color/divider" />
+
+                <TextView
+                    android:id="@+id/textModernDeviationStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Doğru yoldasınız"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/accent_green"
+                    android:accessibilityLiveRegion="assertive" />
+
+                <TextView
+                    android:id="@+id/textModernGpsAccuracyWarning"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:padding="8dp"
+                    android:background="@drawable/bg_gps_warning"
+                    android:textColor="@color/warning_amber"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    android:accessibilityLiveRegion="polite"
+                    android:contentDescription="@string/cd_gps_accuracy_warning"
+                    tools:text="⚠ GPS sinyali zayıf (45 m)"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Dynamic Feedback Text (Bottom) -->
+        <TextView
+            android:id="@+id/textModernStatusMsg"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="@string/status_ready"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp"
+            android:textStyle="italic"
+            android:accessibilityLiveRegion="polite"
+            app:layout_constraintBottom_toTopOf="@id/textModernCoords"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent" />
+
+        <!-- Technical Debug Info -->
+        <TextView
+            android:id="@+id/textModernCoords"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:textSize="10sp"
+            android:textColor="@color/text_secondary"
+            android:alpha="0.4"
+            android:importantForAccessibility="no"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            tools:text="GPS: 39.9, 32.7" />
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

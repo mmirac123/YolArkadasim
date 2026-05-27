@@ -1,0 +1,36 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme: Material 3, dark, high-contrast for accessibility -->
+    <style name="Theme.YolArkadasim" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Primary brand color -->
+        <item name="colorPrimary">@color/primary</item>
+        <item name="colorPrimaryVariant">@color/primary_dark</item>
+        <item name="colorOnPrimary">@color/text_primary</item>
+        <!-- Secondary brand color -->
+        <item name="colorSecondary">@color/accent_green</item>
+        <item name="colorSecondaryVariant">@color/accent_green_dark</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <!-- Background / Surface -->
+        <item name="android:colorBackground">@color/surface_dark</item>
+        <item name="colorSurface">@color/surface_card</item>
+        <item name="colorOnSurface">@color/text_primary</item>
+        <!-- Status bar -->
+        <item name="android:statusBarColor">@color/status_bar</item>
+        <item name="android:navigationBarColor">@color/surface_dark</item>
+        <!-- Text defaults: large and readable -->
+        <item name="android:textColorPrimary">@color/text_primary</item>
+        <item name="android:textColorSecondary">@color/text_secondary</item>
+        <!-- Material 3 shape overrides -->
+        <item name="shapeAppearanceMediumComponent">@style/Shape.YolArkadasim.Medium</item>
+        <item name="shapeAppearanceLargeComponent">@style/Shape.YolArkadasim.Large</item>
+    </style>
+
+    <!-- Rounded corners: 16dp for cards, buttons -->
+    <style name="Shape.YolArkadasim.Medium" parent="ShapeAppearance.Material3.MediumComponent">
+        <item name="cornerSize">16dp</item>
+    </style>
+
+    <!-- Rounded corners: 24dp for bottom sheets, large cards -->
+    <style name="Shape.YolArkadasim.Large" parent="ShapeAppearance.Material3.LargeComponent">
+        <item name="cornerSize">24dp</item>
+    </style>
+</resources>

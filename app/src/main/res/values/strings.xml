@@ -1,0 +1,80 @@
+<resources>
+    <string name="app_name">Yol Arkadaşım</string>
+
+    <!-- Main Button States -->
+    <string name="btn_start_tracking">TAKİBİ BAŞLAT</string>
+    <string name="btn_stop_tracking">TAKİBİ DURDUR</string>
+
+    <!-- Status Messages -->
+    <string name="status_idle">Hat ve durak seçmek için düğmeye basın</string>
+    <string name="status_tracking">GPS takibi aktif…</string>
+    <string name="status_no_permission">Konum izni gerekli</string>
+    <string name="no_route_selected">Önce hat ve durak seçin</string>
+
+    <!-- Route Selection -->
+    <string name="select_destination">NEREYE GİDECEKSİN?</string>
+    <string name="select_route_title">Hat Seç</string>
+    <string name="select_stop_title">İneceğin Durağı Seç</string>
+    <string name="route_info_format">Hat %1$s — %2$s → %3$s</string>
+    <string name="route_list_item_format">%1$s → %2$s</string>
+    <string name="dialog_back">← GERİ</string>
+
+    <!-- Trip Info Panel -->
+    <string name="next_stop_format">Sonraki durak: %1$s</string>
+    <string name="remaining_stops_format">Kalan durak: %1$d</string>
+    <string name="distance_format">Mesafe: ~%1$d m</string>
+    <string name="deviation_format">Sapma: ~%1$d m</string>
+    <string name="route_label">Hat:</string>
+    <string name="destination_label">Hedef:</string>
+
+    <!-- TTS Messages -->
+    <string name="tts_tracking_started">Takip başlatıldı</string>
+    <string name="tts_tracking_stopped">Takip durduruldu</string>
+    <string name="tts_wrong_direction">Dikkat! Yanlış yöne gidiyorsunuz</string>
+    <string name="tts_correct_direction">Doğru yönde ilerliyorsunuz</string>
+    <string name="tts_init_failed">Sesli rehber başlatılamadı</string>
+    <string name="tts_next_stop">Sonraki durağınız: %1$s</string>
+    <string name="tts_arriving">Dikkat! İneceğiniz durağa yaklaşıyorsunuz: %1$s</string>
+    <string name="tts_arrived">İneceğiniz durağa geldiniz!</string>
+    <string name="tts_wrong_bus_direction">Dikkat! Yanlış yöne gidiyorsunuz. Lütfen karşı yöndeki durağa geçin.</string>
+    <string name="tts_route_selected">Hat %1$s seçildi. Hedef: %2$s</string>
+
+    <!-- Recent Destination -->
+    <string name="recent_dest_label">★ SON HEDEFİNİZ</string>
+    <string name="recent_dest_subtitle">Tekrar seçmek için dokunun</string>
+    <string name="cd_recent_dest">Son hedefiniz: %1$s, hat %2$s. Seçmek için dokunun.</string>
+    <string name="tts_recent_dest_selected">Son hedefiniz seçildi: %1$s.</string>
+
+    <!-- GPS Accuracy Warning -->
+    <string name="gps_accuracy_low">⚠ GPS sinyali zayıf (%1$d m)</string>
+    <string name="tts_gps_accuracy_low">Dikkat! GPS sinyali zayıf. Konum doğruluğu düşük olabilir.</string>
+    <string name="cd_gps_accuracy_warning">GPS doğruluğu düşük, konum bilgisi güvenilir olmayabilir</string>
+
+    <!-- Content Descriptions for Accessibility -->
+    <string name="cd_tracking_button">Konum takibini başlat veya durdur</string>
+    <string name="cd_status_icon">Durum göstergesi</string>
+    <string name="cd_select_destination">Gidilecek durak seçmek için dokunun</string>
+    <string name="cd_audio_preview">Sesli önizleme</string>
+    <string name="cd_mode_switch">Arayüz modunu değiştir. Açık: Modern mod, kapalı: Erişilebilir mod</string>
+    <string name="cd_back_button">Geri dön</string>
+    <string name="cd_route_card">Hat seçimi kartı, dokunarak hat değiştirebilirsiniz</string>
+    <string name="cd_tracking_active">Takip aktif</string>
+    <string name="cd_tracking_stopped">Takip durduruldu</string>
+    <string name="cd_arrow_indicator">İleri</string>
+    <string name="cd_bus_icon">Otobüs simgesi</string>
+    <string name="cd_trip_progress">Yolculuk ilerleme çubuğu</string>
+
+    <!-- Modern UI -->
+    <string name="mode_modern">MODERN MOD</string>
+    <string name="label_route">GÜZERGAH</string>
+    <string name="route_not_selected">Henüz Seçilmedi</string>
+    <string name="btn_change">DEĞİŞTİR</string>
+    <string name="label_distance">Kalan Mesafe</string>
+    <string name="label_stops">Kalan Durak</string>
+    <string name="status_ready">Hazır</string>
+    <string name="notification_channel_name">Yolculuk Takibi</string>
+    <string name="notification_channel_desc">Yolculuk sırasında durak bilgilerini ve uyarıları gösterir.</string>
+    <string name="notif_title_tracking">Yolculuk Takip Ediliyor</string>
+    <string name="notif_content_init">Konum bekleniyor…</string>
+    <string name="notif_next_stop">Sıradaki: %1$s (%2$dm)</string>
+</resources>
