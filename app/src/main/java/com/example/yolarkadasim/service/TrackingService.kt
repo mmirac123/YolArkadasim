@@ -67,6 +67,12 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private var isStartStopConfirmed = false
     private var startStopDetectionCount = 0
 
+    private var startBatteryLevel: Int = -1
+    private var sessionGpsDeviationSum = 0.0
+    private var sessionGpsDeviationCount = 0
+    private var sessionWrongDirectionCount = 0
+    private var lastDirectionState = 0
+
     var onUpdate: ((Double, Double, Int, Double, Int, Double, Int) -> Unit)? = null
 
     companion object {
@@ -154,6 +160,16 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         startStopDetectionCount = 0
         startStopIndex = -1 // Wait for the first GPS ping to set this accurately
 
+        sessionGpsDeviationSum = 0.0
+        sessionGpsDeviationCount = 0
+        sessionWrongDirectionCount = 0
+        lastDirectionState = 0
+
+        try {
+            val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+            startBatteryLevel = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        } catch (e: Exception) { startBatteryLevel = -1 }
+
         // Initialize Native Engine
         val isDebug = com.example.yolarkadasim.BuildConfig.DEBUG
         val logPath = applicationContext.getExternalFilesDir(null)?.absolutePath ?: applicationContext.filesDir.absolutePath
@@ -178,6 +194,20 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
 
     fun stopTracking() {
+        try {
+            val stats = StatsStore(this)
+            stats.addGpsDeviationBatch(sessionGpsDeviationSum, sessionGpsDeviationCount)
+            if (sessionWrongDirectionCount > 0) {
+                for (i in 0 until sessionWrongDirectionCount) stats.incrementWrongDirection()
+            }
+            if (startBatteryLevel != -1) {
+                val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
+                val endBatteryLevel = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+                val drop = startBatteryLevel - endBatteryLevel
+                if (drop > 0) stats.addBatteryDrop(drop.toFloat())
+            }
+        } catch (e: Exception) { Log.e(TAG, "Stats save error", e) }
+
         locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
         sensorManager.unregisterListener(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -281,6 +311,13 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
             val deviation = getEngineDeviation()
             val direction = checkRouteDirection(curIdx, prevIdx, destinationIndex)
+
+            sessionGpsDeviationSum += deviation
+            sessionGpsDeviationCount++
+            if (direction == 1 && lastDirectionState != 1) {
+                sessionWrongDirectionCount++
+            }
+            lastDirectionState = direction
 
             // Calculate distance to next stop for UI sync
             var distToNext = 0.0

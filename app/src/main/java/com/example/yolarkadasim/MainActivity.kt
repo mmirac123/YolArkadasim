@@ -203,6 +203,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.valTotalDist.text = String.format(Locale.US, "%.1f km", statsStore.getTotalDistanceKm())
             binding.valTotalStops.text = statsStore.getTotalStops().toString()
             binding.valFavRoute.text = statsStore.getMostUsedRoute()
+            binding.valWrongDirection.text = statsStore.getWrongDirectionCount().toString()
+            binding.valGpsDev.text = String.format(Locale.US, "%.1fm", statsStore.getAverageGpsDeviation())
+            binding.valBatteryDrop.text = String.format(Locale.US, "%.1f%%", statsStore.getTotalBatteryConsumedPct())
         } catch (e: Exception) { Log.e("MainActivity", "Stats refresh error", e) }
     }
 

@@ -557,6 +557,24 @@
                             <TextView android:id="@+id/valFavRoute" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="-" android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
+                    <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_margin="4dp" app:cardBackgroundColor="@color/surface_card" app:cardCornerRadius="16dp">
+                        <LinearLayout android:orientation="vertical" android:padding="16dp" android:gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Yanlış Yön İkazı" android:textSize="11sp" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/valWrongDirection" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                    <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_margin="4dp" app:cardBackgroundColor="@color/surface_card" app:cardCornerRadius="16dp">
+                        <LinearLayout android:orientation="vertical" android:padding="16dp" android:gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Ort. GPS Sapması" android:textSize="11sp" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/valGpsDev" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0.0m" android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                    <com.google.android.material.card.MaterialCardView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_columnWeight="1" android:layout_margin="4dp" app:cardBackgroundColor="@color/surface_card" app:cardCornerRadius="16dp">
+                        <LinearLayout android:orientation="vertical" android:padding="16dp" android:gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Pil Tüketimi" android:textSize="11sp" android:textColor="@color/text_secondary" />
+                            <TextView android:id="@+id/valBatteryDrop" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0%" android:textSize="22sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
                 </GridLayout>
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Seyahat ettikçe istatistiklerin gelişecektir." android:textColor="@color/text_secondary" android:textSize="12sp" android:layout_marginBottom="48dp" app:layout_constraintBottom_toBottomOf="parent" app:layout_constraintEnd_toEndOf="parent" app:layout_constraintStart_toStartOf="parent" />
             </androidx.constraintlayout.widget.ConstraintLayout>
