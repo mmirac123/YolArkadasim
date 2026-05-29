@@ -11,6 +11,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
 import android.speech.RecognitionListener
@@ -61,17 +62,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
-    // Speech Recognition
     private var speechRecognizer: SpeechRecognizer? = null
     private var speechIntent: Intent? = null
 
-    // Shake Detection
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
     private var lastShakeTime: Long = 0
-    private val SHAKE_THRESHOLD = 15f // Hassasiyet ayarı
+    private val SHAKE_THRESHOLD = 15f
 
-    // Latest trip data
     private var lastLat = 0.0
     private var lastLon = 0.0
     private var lastCurIdx = -1
@@ -88,7 +86,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 val binder = service as TrackingService.TrackingBinder
                 trackingService = binder.getService()
                 isBound = true
-                
                 trackingService?.onUpdate = { lat, lon, curIdx, deviation, direction, distance, startIdx ->
                     handleUpdate(lat, lon, curIdx, deviation, direction, distance, startIdx)
                 }
@@ -111,7 +108,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             lastCurIdx = curIdx
             lastDistance = if (distance.isFinite()) distance else 0.0
             lastStartIdx = startIdx
-            
             runOnUiThread {
                 if (!isFinishing && !isDestroyed) {
                     updateUi(lat, lon, curIdx, deviation, lastDistance, startIdx, direction)
@@ -125,38 +121,27 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         try {
             Configuration.getInstance().userAgentValue = packageName
             Configuration.getInstance().load(this, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
-
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
-            
             routeRepository = RouteRepository(this)
             recentDestStore = RecentDestinationStore(this)
             statsStore = StatsStore(this)
             settingsStore = SettingsStore(this)
             tts = TextToSpeech(this, this)
-
-            // Shake detection init
             sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-            
             setupMap()
-            
             val startInModern = settingsStore.isModernModePreferred()
             binding.switchUiMode.isChecked = startInModern
             updateUiMode(startInModern)
-
             setupUiModeSwitcher()
             setupBottomNavigation()
             setupDestinationButtons()
             setupTrackingButtons()
             setupVoiceCommands()
             setupSettingsPage()
-            setupStatsPage()
-
             requestPermissions()
-        } catch (e: Exception) {
-            Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e)
-        }
+        } catch (e: Exception) { Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e) }
     }
 
     private fun setupMap() {
@@ -176,7 +161,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.modernMapView.visibility = if (item.itemId == R.id.nav_map) View.VISIBLE else View.GONE
             binding.modernStatsView.visibility = if (item.itemId == R.id.nav_stats) View.VISIBLE else View.GONE
             binding.modernSettingsView.visibility = if (item.itemId == R.id.nav_settings) View.VISIBLE else View.GONE
-            
             if (item.itemId == R.id.nav_stats) refreshStatsUi()
             if (item.itemId == R.id.nav_map) {
                 updateMapUserPosition()
@@ -204,55 +188,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.valTotalDist.text = String.format(Locale.US, "%.1f km", statsStore.getTotalDistanceKm())
             binding.valTotalStops.text = statsStore.getTotalStops().toString()
             binding.valFavRoute.text = statsStore.getMostUsedRoute()
-            binding.valWrongDirection.text = statsStore.getWrongDirectionCount().toString()
-            binding.valGpsDev.text = String.format(Locale.US, "%.1fm", statsStore.getAverageGpsDeviation())
-            binding.valBatteryDrop.text = String.format(Locale.US, "%.1f%%", statsStore.getTotalBatteryConsumedPct())
         } catch (e: Exception) { Log.e("MainActivity", "Stats refresh error", e) }
-    }
-
-    private fun setupStatsPage() {
-        binding.btnExportCsv.setOnClickListener {
-            exportStatsToCsv()
-        }
-    }
-
-    private fun exportStatsToCsv() {
-        try {
-            val csvContent = buildString {
-                append("Metrik,Deger\n")
-                append("Toplam Sefer,${statsStore.getTotalTrips()}\n")
-                append("Toplam Test Edilen Mesafe (KM),${String.format(Locale.US, "%.1f", statsStore.getTotalDistanceKm())}\n")
-                append("Test Edilen Durak Sayisi,${statsStore.getTotalStops()}\n")
-                append("En Cok Kullanilan Hat,${statsStore.getMostUsedRoute()}\n")
-                append("Yanlis Yon Ikazi Sayisi,${statsStore.getWrongDirectionCount()}\n")
-                append("Ortalama GPS Sapmasi (Metre),${String.format(Locale.US, "%.1f", statsStore.getAverageGpsDeviation())}\n")
-                append("Toplam Pil Tuketimi (%),${String.format(Locale.US, "%.1f", statsStore.getTotalBatteryConsumedPct())}\n")
-            }
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val contentValues = android.content.ContentValues().apply {
-                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "yolarkadasim_akademik_veriler_${System.currentTimeMillis()}.csv")
-                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/csv")
-                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
-                }
-
-                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                if (uri != null) {
-                    contentResolver.openOutputStream(uri)?.use { it.write(csvContent.toByteArray()) }
-                    Toast.makeText(this, "Veriler İndirilenler klasörüne kaydedildi!", Toast.LENGTH_LONG).show()
-                } else {
-                    Toast.makeText(this, "Dosya oluşturulamadı", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
-                val file = java.io.File(downloadsDir, "yolarkadasim_akademik_veriler_${System.currentTimeMillis()}.csv")
-                file.writeText(csvContent)
-                Toast.makeText(this, "Veriler İndirilenler klasörüne kaydedildi!", Toast.LENGTH_LONG).show()
-            }
-        } catch (e: Exception) {
-            Toast.makeText(this, "CSV kaydetme hatası", Toast.LENGTH_LONG).show()
-            Log.e("MainActivity", "Export CSV Error", e)
-        }
     }
 
     override fun onStart() {
@@ -268,9 +204,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         super.onResume()
         try { 
             binding.mapView.onResume()
-            accelerometer?.let {
-                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-            }
+            accelerometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
         } catch (e: Exception) {}
     }
 
@@ -323,6 +257,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
 
     private fun updateUiMode(isModern: Boolean) {
         if (isModern) {
+            // Stop any ongoing speech when switching to Modern Mode
+            try { tts?.stop() } catch (e: Exception) {}
+
             binding.layoutAccessibility.visibility = View.GONE
             binding.layoutModern.visibility = View.VISIBLE
             binding.switchUiMode.text = getString(R.string.mode_modern)
@@ -331,9 +268,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.layoutAccessibility.visibility = View.VISIBLE
             binding.layoutModern.visibility = View.GONE
             binding.switchUiMode.text = getString(R.string.mode_easy)
-            if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) {
-                speakGuidedWalkthrough()
-            }
+            if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) speakGuidedWalkthrough()
         }
     }
 
@@ -361,6 +296,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         if (!matches.isNullOrEmpty()) processVoiceCommand(matches[0].lowercase(Locale("tr", "TR")))
+                        else speakMessage(getString(R.string.tts_command_not_understood))
                     }
                     override fun onReadyForSpeech(params: Bundle?) {}
                     override fun onBeginningOfSpeech() {}
@@ -373,7 +309,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 })
             }
         } catch (e: Exception) { Log.e("MainActivity", "STT setup fail", e) }
-
         binding.fabVoiceCommand.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1002)
@@ -395,22 +330,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private fun processVoiceCommand(command: String) {
         val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
         val cmd = command.lowercase(Locale("tr", "TR"))
-
-        // NLP for setting destination by name
         if (cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("ayarla") || cmd.contains("yap")) {
             var matchedStop: BusStop? = null
             for (stop in route.stops) {
                 val stopNameLower = stop.name.lowercase(Locale("tr", "TR"))
                 val parts = stopNameLower.split(" ", ".", ",")
                 for (part in parts) {
-                    if (part.length > 3 && cmd.contains(part)) {
-                        matchedStop = stop
-                        break
-                    }
+                    if (part.length > 3 && cmd.contains(part)) { matchedStop = stop; break }
                 }
                 if (matchedStop != null) break
             }
-
             if (matchedStop != null) {
                 destinationStopIndex = route.stops.indexOf(matchedStop)
                 selectedDestinationStop = matchedStop
@@ -425,7 +354,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 return
             }
         }
-
         if (!isTracking) { speakMessage(getString(R.string.tts_info_not_tracking)); return }
         when {
             command.contains("nerede") || command.contains("durak") -> {
@@ -494,11 +422,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private fun updateUi(lat: Double, lon: Double, curIdx: Int, deviation: Double, distance: Double, startIdx: Int, direction: Int) {
         if (isFinishing || isDestroyed) return
         val route = selectedRoute ?: return
-        
         binding.textCoordinates.text = String.format(Locale.US, "%.6f, %.6f", lat, lon)
         binding.textDeviation.text = "Sapma: ${if (deviation.isFinite()) deviation.toInt() else 0} m"
         binding.textDistanceToNext.text = "Mesafe: ${distance.toInt()} m"
-        
         if (deviation > 200.0 || direction == 1) {
             binding.textDirectionStatus.text = "UYARI: ROTA DIŞI!"
             binding.textDirectionStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_red))
@@ -506,7 +432,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.textDirectionStatus.text = "Doğru yoldasınız."
             binding.textDirectionStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_green))
         }
-
         val nextIdx = if (destinationStopIndex >= curIdx) curIdx + 1 else curIdx - 1
         if (nextIdx in route.stops.indices) {
             val nextStop = route.stops[nextIdx]
@@ -520,7 +445,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             val progress = if (tripStops > 0) ((coveredStops / tripStops) * 100).toInt().coerceIn(0, 100) else 100
             binding.progressModernTrip.progress = progress
         }
-        
         if (binding.modernMapView.visibility == View.VISIBLE) updateMapUserPosition()
     }
 
@@ -610,18 +534,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
 
     override fun onSensorChanged(event: SensorEvent?) {
         if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
-            val x = event.values[0]
-            val y = event.values[1]
-            val z = event.values[2]
+            val x = event.values[0]; val y = event.values[1]; val z = event.values[2]
             val gForce = sqrt(x*x + y*y + z*z)
-            
             val now = System.currentTimeMillis()
             if (gForce > SHAKE_THRESHOLD) {
-                if (now - lastShakeTime > 2000) { // 2 saniye bekleme
+                if (now - lastShakeTime > 2000) {
                     lastShakeTime = now
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                        startListening()
-                    }
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
                 }
             }
         }
