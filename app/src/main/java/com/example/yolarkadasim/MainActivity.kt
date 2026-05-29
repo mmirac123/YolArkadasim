@@ -429,13 +429,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 userMarker = Marker(binding.mapView)
                 userMarker?.title = "Siz"
                 
-                val blueCircle = android.graphics.drawable.GradientDrawable()
-                blueCircle.shape = android.graphics.drawable.GradientDrawable.OVAL
-                blueCircle.setColor(android.graphics.Color.BLUE)
-                blueCircle.setStroke(6, android.graphics.Color.WHITE)
-                blueCircle.setSize(65, 65)
+                val userDot = android.graphics.drawable.GradientDrawable()
+                userDot.shape = android.graphics.drawable.GradientDrawable.OVAL
+                userDot.setColor(android.graphics.Color.parseColor("#00E676")) // Bright visible green
+                userDot.setStroke(8, android.graphics.Color.WHITE)
+                userDot.setSize(90, 90) // Massive size for visibility
                 
-                userMarker?.icon = blueCircle
+                userMarker?.icon = userDot
                 userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 
                 binding.mapView.overlays.add(userMarker)
