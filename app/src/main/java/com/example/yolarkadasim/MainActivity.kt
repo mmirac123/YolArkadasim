@@ -254,7 +254,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             binding.layoutModern.visibility = View.GONE
             binding.switchUiMode.text = getString(R.string.mode_easy)
             if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) {
-                speakMessage("Kolay mod açıldı.")
+                speakMessage("Kolay mod açıldı. Ekranda ortadaki dev tuş ile rota seçebilir, en alttaki butonla takibi başlatıp durdurabilirsiniz. Ayrıca sağ üstteki mikrofon tuşuna basarak sesli arama yapabilirsiniz.")
             }
         }
     }
@@ -315,10 +315,49 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun processVoiceCommand(command: String) {
+        val cmd = command.lowercase(Locale("tr", "TR"))
+        val route = selectedRoute
+
+        if (route != null && cmd.length > 2) {
+            var matchedStop: BusStop? = null
+            for (stop in route.stops) {
+                val stopNameLower = stop.name.lowercase(Locale("tr", "TR"))
+                if (stopNameLower.contains(cmd) || cmd.contains(stopNameLower)) {
+                    matchedStop = stop
+                    break
+                }
+                val parts = stopNameLower.split("-", " ")
+                for (part in parts) {
+                    if (part.length > 3 && cmd.contains(part)) {
+                        matchedStop = stop
+                        break
+                    }
+                }
+                if (matchedStop != null) break
+            }
+
+            if (matchedStop != null) {
+                destinationStopIndex = route.stops.indexOf(matchedStop)
+                selectedDestinationStop = matchedStop
+                binding.textTargetStop.text = "Hedef: ${matchedStop.name}"
+                binding.textModernDest.text = matchedStop.name
+                
+                if (isTracking) {
+                    trackingService?.updateDestination(destinationStopIndex)
+                    speakMessage("${matchedStop.name} durağı yeni hedef olarak güncellendi.")
+                } else {
+                    speakMessage("${matchedStop.name} durağı hedef olarak seçildi. Takibi başlatabilirsiniz.")
+                    updateButtonState()
+                }
+                return
+            }
+        }
+
         if (!isTracking) { speakMessage(getString(R.string.tts_info_not_tracking)); return }
-        val route = selectedRoute ?: return
+        if (route == null) return
+
         when {
-            command.contains("nerede") || command.contains("durak") -> {
+            cmd.contains("nerede") || cmd.contains("durak") -> {
                 if (lastCurIdx in route.stops.indices) {
                     val currentStop = route.stops[lastCurIdx].name
                     val nextIdx = if (destinationStopIndex >= lastCurIdx) lastCurIdx + 1 else lastCurIdx - 1
@@ -326,9 +365,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     else speakMessage("Şu an $currentStop durağındasınız.")
                 }
             }
-            command.contains("kaç") || command.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
-            command.contains("mesafe") || command.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
-            command.contains("durdur") || command.contains("bitir") -> { stopTracking(); speakMessage("Takip durduruldu.") }
+            cmd.contains("kaç") || cmd.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
+            cmd.contains("mesafe") || cmd.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
+            cmd.contains("durdur") || cmd.contains("bitir") -> { stopTracking(); speakMessage("Takip durduruldu.") }
             else -> speakMessage(getString(R.string.tts_command_not_understood))
         }
     }

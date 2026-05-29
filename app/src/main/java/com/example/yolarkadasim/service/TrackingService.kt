@@ -127,6 +127,18 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         }
     }
 
+    fun updateDestination(newDestIndex: Int) {
+        destinationIndex = newDestIndex
+        hasAnnouncedTargetReminder = false
+        hasAnnouncedArrival = false
+        lastAnnouncedLeavingPreDest = false
+        selectedRoute?.stops?.getOrNull(newDestIndex)?.let {
+            val notification = createNotification("Yeni Hedef: ${it.name}")
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.notify(NOTIF_ID, notification)
+        }
+    }
+
     fun startTracking(route: BusRoute, destIdx: Int, lats: DoubleArray, lons: DoubleArray) {
         selectedRoute = route
         destinationIndex = destIdx
