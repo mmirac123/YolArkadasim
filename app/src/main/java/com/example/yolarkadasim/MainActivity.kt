@@ -7,7 +7,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.graphics.Color
-import android.os.Build
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.os.IBinder
 import android.speech.RecognitionListener
@@ -37,8 +40,9 @@ import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
+import kotlin.math.sqrt
 
-class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
+class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEventListener {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var routeRepository: RouteRepository
@@ -57,9 +61,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
+    // Speech Recognition
     private var speechRecognizer: SpeechRecognizer? = null
     private var speechIntent: Intent? = null
 
+    // Shake Detection
+    private lateinit var sensorManager: SensorManager
+    private var accelerometer: Sensor? = null
+    private var lastShakeTime: Long = 0
+    private val SHAKE_THRESHOLD = 15f // Hassasiyet ayarı
+
+    // Latest trip data
     private var lastLat = 0.0
     private var lastLon = 0.0
     private var lastCurIdx = -1
@@ -111,7 +123,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         try {
-            // OSM Configuration
             Configuration.getInstance().userAgentValue = packageName
             Configuration.getInstance().load(this, getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
 
@@ -123,6 +134,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             statsStore = StatsStore(this)
             settingsStore = SettingsStore(this)
             tts = TextToSpeech(this, this)
+
+            // Shake detection init
+            sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+            accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             
             setupMap()
             
@@ -202,12 +217,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onResume() {
         super.onResume()
-        try { binding.mapView.onResume() } catch (e: Exception) {}
+        try { 
+            binding.mapView.onResume()
+            accelerometer?.let {
+                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            }
+        } catch (e: Exception) {}
     }
 
     override fun onPause() {
         super.onPause()
-        try { binding.mapView.onPause() } catch (e: Exception) {}
+        try { 
+            binding.mapView.onPause()
+            sensorManager.unregisterListener(this)
+        } catch (e: Exception) {}
     }
 
     override fun onStop() {
@@ -231,10 +254,18 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             isTtsReady = true
             if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
                 binding.root.postDelayed({
-                    if (!isFinishing && !isDestroyed) speakMessage("Yol Arkadaşım uygulamasına hoş geldiniz. Kolay mod aktif.")
+                    if (!isFinishing && !isDestroyed) speakGuidedWalkthrough()
                 }, 1000)
             }
         }
+    }
+
+    private fun speakGuidedWalkthrough() {
+        val msg = "Yol Arkadaşım uygulamasına hoş geldiniz. Kolay mod aktif. " +
+                  "Şu an ana ekrandasınız. Ekranın en üstünde yer alan dev butona basarak hangi durağa gitmek istediğinizi seçebilirsiniz. " +
+                  "Seçim yaptıktan sonra ekranın ortasında kocaman bir yeşil buton belirecek, ona basarak takibi başlatabilirsiniz. " +
+                  "Ayrıca telefonu sallayarak veya sağ üstteki mikrofon butonuna basarak hedefinizi sesle söyleyebilirsiniz."
+        speakMessage(msg)
     }
 
     private fun setupUiModeSwitcher() {
@@ -252,7 +283,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             binding.layoutModern.visibility = View.GONE
             binding.switchUiMode.text = getString(R.string.mode_easy)
             if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) {
-                speakMessage("Kolay mod açıldı.")
+                speakGuidedWalkthrough()
             }
         }
     }
@@ -313,8 +344,40 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun processVoiceCommand(command: String) {
+        val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
+        val cmd = command.lowercase(Locale("tr", "TR"))
+
+        // NLP for setting destination by name
+        if (cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("ayarla") || cmd.contains("yap")) {
+            var matchedStop: BusStop? = null
+            for (stop in route.stops) {
+                val stopNameLower = stop.name.lowercase(Locale("tr", "TR"))
+                val parts = stopNameLower.split(" ", ".", ",")
+                for (part in parts) {
+                    if (part.length > 3 && cmd.contains(part)) {
+                        matchedStop = stop
+                        break
+                    }
+                }
+                if (matchedStop != null) break
+            }
+
+            if (matchedStop != null) {
+                destinationStopIndex = route.stops.indexOf(matchedStop)
+                selectedDestinationStop = matchedStop
+                selectedRoute = route
+                binding.layoutRouteInfo.visibility = View.VISIBLE
+                binding.textDestinationInfo.text = "Hedef: ${matchedStop.name}"
+                binding.textModernRouteName.text = "Hat ${route.routeId} → ${matchedStop.name}"
+                binding.textMapRouteName.text = "Hat ${route.routeId} → ${matchedStop.name}"
+                recentDestStore.save(route, matchedStop, destinationStopIndex)
+                if (isTracking) speakMessage("${matchedStop.name} durağı yeni hedef olarak ayarlandı.")
+                else { speakMessage("${matchedStop.name} durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz."); updateButtonState() }
+                return
+            }
+        }
+
         if (!isTracking) { speakMessage(getString(R.string.tts_info_not_tracking)); return }
-        val route = selectedRoute ?: return
         when {
             command.contains("nerede") || command.contains("durak") -> {
                 if (lastCurIdx in route.stops.indices) {
@@ -495,4 +558,25 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1002 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startListening()
     }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_ACCELEROMETER) {
+            val x = event.values[0]
+            val y = event.values[1]
+            val z = event.values[2]
+            val gForce = sqrt(x*x + y*y + z*z)
+            
+            val now = System.currentTimeMillis()
+            if (gForce > SHAKE_THRESHOLD) {
+                if (now - lastShakeTime > 2000) { // 2 saniye bekleme
+                    lastShakeTime = now
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                        startListening()
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
 }
