@@ -1,6 +1,12 @@
 #include <jni.h>
 #include <cmath>
 #include <algorithm>
+#include <memory>
+#include <string>
+#include <vector>
+#include "Logger.h"
+#include "KalmanFilter2D.h"
+#include "NavigationFSM.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -9,6 +15,11 @@
 namespace {
 
 constexpr double EARTH_RADIUS_METERS = 6371000.0;
+
+std::unique_ptr<Logger> g_logger;
+KalmanFilter2D g_kalman;
+NavigationFSM g_fsm;
+bool g_engine_initialized = false;
 
 inline double degToRad(double degrees) {
     return degrees * (M_PI / 180.0);
@@ -51,7 +62,7 @@ double pointToSegmentDistance(double pLat, double pLon,
     return std::sqrt(dx*dx + dy*dy);
 }
 
-// Shared Core Implementation
+// Core Logic Helpers
 int core_findNearestStopIndex(JNIEnv *env, jdouble currentLat, jdouble currentLon,
                             jdoubleArray stopLats, jdoubleArray stopLons, jint previousIndex) {
     const jsize count = env->GetArrayLength(stopLats);
@@ -62,8 +73,7 @@ int core_findNearestStopIndex(JNIEnv *env, jdouble currentLat, jdouble currentLo
     int resultIndex = previousIndex;
 
     if (previousIndex < 0) {
-        // --- INITIAL SEARCH: START OF TRIP ---
-        // Prioritize the first 10 stops to avoid jumping to return-trip stops in circular routes.
+        // Initial search: First 10 stops prioritization
         int searchLimit = std::min((int)count, 10);
         double minDistance = -1.0;
         int bestIdx = 0;
@@ -75,8 +85,6 @@ int core_findNearestStopIndex(JNIEnv *env, jdouble currentLat, jdouble currentLo
             }
         }
 
-        // If the best find in the first 10 stops is reasonably close (< 800m), anchor there.
-        // Otherwise, do a global search.
         if (minDistance > 800.0) {
             for (int i = searchLimit; i < (int)count; ++i) {
                 double d = haversineDistance(currentLat, currentLon, lats[i], lons[i]);
@@ -89,12 +97,11 @@ int core_findNearestStopIndex(JNIEnv *env, jdouble currentLat, jdouble currentLo
         resultIndex = bestIdx;
     }
     else {
-        // --- TRACKING MODE: FORWARD WINDOW ---
-        // Look ahead 4 stops. Advance ONLY if we are very close to a FUTURE stop (<= 35m).
+        // Strict forward tracking
         int maxSearch = std::min((int)count - 1, previousIndex + 4);
         for (int i = previousIndex + 1; i <= maxSearch; ++i) {
             double d = haversineDistance(currentLat, currentLon, lats[i], lons[i]);
-            if (d <= 35.0) { // Tightened from 40m for urban accuracy
+            if (d <= 35.0) {
                 resultIndex = i;
                 break;
             }
@@ -141,5 +148,67 @@ JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_MainActivity_checkRouteDire
 JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_service_TrackingService_checkRouteDirection(JNIEnv*, jobject, jint cur, jint prev, jint dest) { if (prev < 0 || cur == prev) return -1; return (std::abs(dest - cur) < std::abs(dest - prev)) ? 0 : 1; }
 
 JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_MainActivity_checkDirection(JNIEnv*, jobject, jdouble curLat, jdouble curLon, jdouble tarLat, jdouble tarLon, jdouble prevDist) { double curDist = haversineDistance(curLat, curLon, tarLat, tarLon); return (prevDist < 0.0) ? -1 : (curDist > prevDist ? 1 : 0); }
+
+// Engine Bindings
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_MainActivity_initNavigationEngine(JNIEnv* env, jobject, jstring storagePath, jboolean enableLogging) {
+    const char* pathStr = env->GetStringUTFChars(storagePath, nullptr);
+    g_logger = std::make_unique<Logger>(std::string(pathStr), enableLogging);
+    env->ReleaseStringUTFChars(storagePath, pathStr);
+    g_engine_initialized = true;
+}
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_service_TrackingService_initNavigationEngine(JNIEnv* env, jobject, jstring storagePath, jboolean enableLogging) {
+    const char* pathStr = env->GetStringUTFChars(storagePath, nullptr);
+    if (pathStr) {
+        g_logger = std::make_unique<Logger>(std::string(pathStr), enableLogging);
+        env->ReleaseStringUTFChars(storagePath, pathStr);
+    }
+    g_engine_initialized = true;
+}
+
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_MainActivity_setEngineRoute(JNIEnv* env, jobject, jdoubleArray lats, jdoubleArray lons) {
+    const jsize count = env->GetArrayLength(lats);
+    jdouble* latData = env->GetDoubleArrayElements(lats, nullptr);
+    jdouble* lonData = env->GetDoubleArrayElements(lons, nullptr);
+    std::vector<double> vLats(latData, latData + count);
+    std::vector<double> vLons(lonData, lonData + count);
+    g_fsm.setRoute(vLats, vLons);
+    env->ReleaseDoubleArrayElements(lats, latData, JNI_ABORT);
+    env->ReleaseDoubleArrayElements(lons, lonData, JNI_ABORT);
+}
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_service_TrackingService_setEngineRoute(JNIEnv* env, jobject, jdoubleArray lats, jdoubleArray lons) {
+    const jsize count = env->GetArrayLength(lats);
+    jdouble* latData = env->GetDoubleArrayElements(lats, nullptr);
+    jdouble* lonData = env->GetDoubleArrayElements(lons, nullptr);
+    std::vector<double> vLats(latData, latData + count);
+    std::vector<double> vLons(lonData, lonData + count);
+    g_fsm.setRoute(vLats, vLons);
+    env->ReleaseDoubleArrayElements(lats, latData, JNI_ABORT);
+    env->ReleaseDoubleArrayElements(lons, lonData, JNI_ABORT);
+}
+
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_MainActivity_processEngineLocation(JNIEnv* env, jobject, jdouble lat, jdouble lon, jfloat speed, jfloat bearing, jfloat accuracy, jfloat accelX, jfloat accelY, jfloat accelZ, jlong timestamp) {
+    if (g_logger) g_logger->logLocation(lat, lon, speed, bearing, accuracy, accelX, accelY, accelZ, timestamp);
+    g_kalman.update(lat, lon, speed, bearing, accuracy, accelX, accelY, accelZ, timestamp);
+    g_fsm.updateLocation(g_kalman.getLat(), g_kalman.getLon());
+}
+JNIEXPORT void JNICALL Java_com_example_yolarkadasim_service_TrackingService_processEngineLocation(JNIEnv* env, jobject, jdouble lat, jdouble lon, jfloat speed, jfloat bearing, jfloat accuracy, jfloat accelX, jfloat accelY, jfloat accelZ, jlong timestamp) {
+    if (g_logger) g_logger->logLocation(lat, lon, speed, bearing, accuracy, accelX, accelY, accelZ, timestamp);
+    g_kalman.update(lat, lon, speed, bearing, accuracy, accelX, accelY, accelZ, timestamp);
+    g_fsm.updateLocation(g_kalman.getLat(), g_kalman.getLon());
+}
+
+JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_MainActivity_getEngineActiveStopIndex(JNIEnv*, jobject) { return g_fsm.getActiveStopIndex(); }
+JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_service_TrackingService_getEngineActiveStopIndex(JNIEnv*, jobject) { return g_fsm.getActiveStopIndex(); }
+
+JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_MainActivity_getEngineStopState(JNIEnv*, jobject, jint index) { return static_cast<jint>(g_fsm.getStopState(index)); }
+JNIEXPORT jint JNICALL Java_com_example_yolarkadasim_service_TrackingService_getEngineStopState(JNIEnv*, jobject, jint index) { return static_cast<jint>(g_fsm.getStopState(index)); }
+
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_MainActivity_getEngineSmoothedLat(JNIEnv*, jobject) { return g_kalman.getLat(); }
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_service_TrackingService_getEngineSmoothedLat(JNIEnv*, jobject) { return g_kalman.getLat(); }
+
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_MainActivity_getEngineSmoothedLon(JNIEnv*, jobject) { return g_kalman.getLon(); }
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_service_TrackingService_getEngineSmoothedLon(JNIEnv*, jobject) { return g_kalman.getLon(); }
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_MainActivity_getEngineDeviation(JNIEnv*, jobject) { return g_fsm.getCrossTrackError(); }
+JNIEXPORT jdouble JNICALL Java_com_example_yolarkadasim_service_TrackingService_getEngineDeviation(JNIEnv*, jobject) { return g_fsm.getCrossTrackError(); }
 
 } // extern "C"

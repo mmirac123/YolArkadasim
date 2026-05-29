@@ -52,10 +52,26 @@ class StatsStore(context: Context) {
 
     private fun getRouteUsageCounts(): Map<String, Int> {
         val data = prefs.getString("route_counts", "") ?: ""
-        if (data.isEmpty()) return emptyMap()
-        return data.split(",").associate {
-            val parts = it.split(":")
-            parts[0] to parts[1].toInt()
+        if (data.isBlank()) return emptyMap()
+        
+        val map = mutableMapOf<String, Int>()
+        try {
+            data.split(",").forEach {
+                val item = it.trim()
+                if (item.isNotEmpty() && item.contains(":")) {
+                    val parts = item.split(":")
+                    if (parts.size == 2) {
+                        val key = parts[0].trim()
+                        val value = parts[1].trim().toIntOrNull()
+                        if (value != null && key.isNotEmpty()) {
+                            map[key] = value
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignore corruption
         }
+        return map
     }
 }

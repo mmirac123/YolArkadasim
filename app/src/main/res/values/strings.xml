@@ -73,6 +73,10 @@
     <string name="label_distance">Kalan Mesafe</string>
     <string name="label_stops">Kalan Durak</string>
     <string name="status_ready">Hazır</string>
+    <string name="nav_tracking">Takip</string>
+    <string name="nav_map">Harita</string>
+    <string name="nav_stats">İstatistik</string>
+    <string name="nav_settings">Ayarlar</string>
     <string name="notification_channel_name">Yolculuk Takibi</string>
     <string name="notification_channel_desc">Yolculuk sırasında durak bilgilerini ve uyarıları gösterir.</string>
     <string name="notif_title_tracking">Yolculuk Takip Ediliyor</string>

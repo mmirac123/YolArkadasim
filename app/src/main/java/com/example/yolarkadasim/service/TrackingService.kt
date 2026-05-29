@@ -26,7 +26,12 @@ import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
 import java.util.Locale
 
-class TrackingService : Service(), TextToSpeech.OnInitListener {
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+
+class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListener {
 
     private val binder = TrackingBinder()
     private var tts: TextToSpeech? = null
@@ -34,6 +39,18 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
+
+    private lateinit var sensorManager: SensorManager
+    private var linearAccelSensor: Sensor? = null
+
+    private var accelXSum = 0f
+    private var accelYSum = 0f
+    private var accelZSum = 0f
+    private var accelCount = 0
+
+    private var lastAccelX = 0f
+    private var lastAccelY = 0f
+    private var lastAccelZ = 0f
 
     private var selectedRoute: BusRoute? = null
     private var startStopIndex: Int = -1
@@ -63,9 +80,15 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
     }
 
     external fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double
-    external fun findNearestStopIndex(curLat: Double, curLon: Double, lats: DoubleArray, lons: DoubleArray, prevIdx: Int): Int
-    external fun calculatePolylineDeviation(curLat: Double, curLon: Double, lats: DoubleArray, lons: DoubleArray, prevIdx: Int): Double
+    external fun getEngineDeviation(): Double
     external fun checkRouteDirection(curIdx: Int, prevIdx: Int, destIdx: Int): Int
+    external fun initNavigationEngine(storagePath: String, enableLogging: Boolean)
+    external fun setEngineRoute(lats: DoubleArray, lons: DoubleArray)
+    external fun processEngineLocation(lat: Double, lon: Double, speed: Float, bearing: Float, accuracy: Float, accelX: Float, accelY: Float, accelZ: Float, timestamp: Long)
+    external fun getEngineActiveStopIndex(): Int
+    external fun getEngineStopState(index: Int): Int
+    external fun getEngineSmoothedLat(): Double
+    external fun getEngineSmoothedLon(): Double
 
     inner class TrackingBinder : Binder() {
         fun getService(): TrackingService = this@TrackingService
@@ -75,13 +98,25 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         super.onCreate()
         tts = TextToSpeech(this, this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        linearAccelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
         createNotificationChannel()
     }
 
     override fun onBind(intent: Intent): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIF_ID, createNotification(getString(R.string.notif_content_init)))
+        val notification = createNotification(getString(R.string.notif_content_init))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, notification, android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+        } else {
+            startForeground(NOTIF_ID, notification)
+        }
+        
+        linearAccelSensor?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+        }
+        
         return START_NOT_STICKY
     }
 
@@ -105,53 +140,39 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         hasAnnouncedArrival = false
         isStartStopConfirmed = false
         startStopDetectionCount = 0
+        startStopIndex = -1 // Wait for the first GPS ping to set this accurately
 
-        // Initial detection
-        detectStartStop()
+        // Initialize Native Engine
+        val isDebug = com.example.yolarkadasim.BuildConfig.DEBUG
+        val logPath = applicationContext.getExternalFilesDir(null)?.absolutePath ?: applicationContext.filesDir.absolutePath
+        initNavigationEngine(logPath, isDebug)
+        setEngineRoute(lats, lons)
 
-        beginLocationUpdates()
-    }
-
-    private fun detectStartStop() {
-        val lats = stopLats ?: return
-        val lons = stopLons ?: return
+        // Try to quickly initialize engine with the best known last location
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
-                if (loc != null) {
-                    val detectedIdx = findNearestStopIndex(loc.latitude, loc.longitude, lats, lons, -1)
-                    val route = selectedRoute ?: return@addOnSuccessListener
-                    
-                    val distToStop = calculateDistance(loc.latitude, loc.longitude, lats[detectedIdx], lons[detectedIdx])
-                    val stopName = route.stops[detectedIdx].name
-
-                    if (distToStop <= 35.0) {
-                        // User is effectively AT the stop
-                        startStopIndex = detectedIdx
-                        isStartStopConfirmed = true
-                        val totalStops = Math.abs(destinationIndex - startStopIndex)
-                        speak("${stopName} durağından biniş algılandı. Hedefinize ${totalStops} durak kaldı.")
-                    } else {
-                        // User is NEAR but not AT the stop
-                        startStopIndex = detectedIdx
-                        isStartStopConfirmed = false // Will wait for movement or closer approach
-                        val totalStops = Math.abs(destinationIndex - startStopIndex)
-                        speak("En yakın biniş durağı: ${stopName}. Lütfen durağa gidiniz. Yolculuğunuz ${totalStops} durak sürecek.")
-                    }
-                    startStopDetectionCount = 1
+                if (loc != null && startStopIndex == -1) {
+                    processLocation(loc)
                 }
             }
         } catch (e: SecurityException) {
-            Log.e(TAG, "Permission error in detectStartStop", e)
+            Log.e(TAG, "Permission error", e)
         }
+
+        // Start location updates directly; the first ping will detect the start stop
+        beginLocationUpdates()
     }
+
+
 
     fun stopTracking() {
         locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) }
+        sensorManager.unregisterListener(this)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
 
-    private var currentInterval = 5000L
+    private var currentInterval = 1000L
 
     private fun beginLocationUpdates() {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, currentInterval)
@@ -161,7 +182,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         locationCallback = object : LocationCallback() {
             override fun onLocationResult(result: LocationResult) {
                 val location = result.lastLocation ?: return
-                processLocation(location.latitude, location.longitude)
+                processLocation(location)
                 adjustSamplingRate(location.speed) // Speed is in m/s
             }
         }
@@ -181,9 +202,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
      */
     private fun adjustSamplingRate(speed: Float) {
         val newInterval = when {
-            speed < 2.0f -> 7000L  // ~7.2 km/h (Stationary or slow walk)
-            speed < 15.0f -> 4000L // ~54 km/h (Normal city traffic)
-            else -> 2000L          // High speed
+            speed < 2.0f -> 2000L  // ~7.2 km/h (Stationary or slow walk)
+            else -> 1000L          // Moving (1 saniye)
         }
 
         if (newInterval != currentInterval) {
@@ -198,63 +218,97 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
-    private fun processLocation(lat: Double, lon: Double) {
+    private fun processLocation(location: android.location.Location) {
+        try {
+            val lat = location.latitude
+            val lon = location.longitude
+            val speed = location.speed
+            val bearing = location.bearing
+            val accuracy = location.accuracy
+
+            // Do not lock onto a route initially using a wildly inaccurate GPS ping
+            if (startStopIndex == -1 && accuracy > 100.0f) {
+                Log.w(TAG, "Ignoring inaccurate ping for initial lock-on: $accuracy m")
+                return
+            }
+
+            // Process Sensor Data Averages
+            if (accelCount > 0) {
+                lastAccelX = accelXSum / accelCount
+                lastAccelY = accelYSum / accelCount
+                lastAccelZ = accelZSum / accelCount
+                accelXSum = 0f
+                accelYSum = 0f
+                accelZSum = 0f
+                accelCount = 0
+            }
+
+            // Send to Engine
+            processEngineLocation(lat, lon, speed, bearing, accuracy, lastAccelX, lastAccelY, lastAccelZ, System.currentTimeMillis())
+
+            val lats = stopLats ?: return
+            val lons = stopLons ?: return
+            val route = selectedRoute ?: return
+
+            val curIdx = getEngineActiveStopIndex()
+            if (curIdx < 0) return
+
+            // --- First Time Detection & Announcement ---
+            if (startStopIndex == -1) {
+                startStopIndex = curIdx
+                val distToStop = calculateDistance(lat, lon, route.stops[curIdx].lat, route.stops[curIdx].lon)
+                val stopName = route.stops[curIdx].name
+                val totalStops = Math.abs(destinationIndex - startStopIndex)
+
+                if (distToStop <= 35.0) {
+                    speak("${stopName} durağından biniş algılandı. Hedefinize ${totalStops} durak kaldı.")
+                } else {
+                    speak("En yakın biniş durağı: ${stopName}. Lütfen durağa gidiniz. Yolculuğunuz ${totalStops} durak sürecek.")
+                }
+            }
+
+            val deviation = getEngineDeviation()
+            val direction = checkRouteDirection(curIdx, prevIdx, destinationIndex)
+
+            // Calculate distance to next stop for UI sync
+            var distToNext = 0.0
+            val nextIdxForUi = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1
+            if (nextIdxForUi in route.stops.indices) {
+                val ns = route.stops[nextIdxForUi]
+                distToNext = calculateDistance(lat, lon, ns.lat, ns.lon)
+            }
+
+            // Notify activity
+            onUpdate?.invoke(lat, lon, curIdx, deviation, direction, distToNext, startStopIndex)
+
+            // TTS and Logic...
+            processNavigationLogic(lat, lon, curIdx, route, distToNext)
+
+            prevIdx = curIdx
+        } catch (e: Exception) {
+            Log.e(TAG, "processLocation error", e)
+        }
+    }
+
+    private fun processNavigationLogic(lat: Double, lon: Double, curIdx: Int, route: BusRoute, distToNext: Double) {
         val lats = stopLats ?: return
         val lons = stopLons ?: return
-        val route = selectedRoute ?: return
-
-        val curIdx = findNearestStopIndex(lat, lon, lats, lons, prevIdx)
-        if (curIdx < 0) return
-
-        // --- Start Stop Refinement (Catch-up) ---
-        // If we just started (within first 3 updates), verify if we moved significantly
-        // or if we've arrived at our first stop properly.
-        if (!isStartStopConfirmed && startStopDetectionCount < 5) {
-            val distToDetectedStart = calculateDistance(lat, lon, lats[startStopIndex], lons[startStopIndex])
-            // If we are very close to the assumed start stop (<= 30m), confirm it.
-            if (distToDetectedStart <= 30.0) {
-                isStartStopConfirmed = true
-                Log.d(TAG, "Start stop confirmed at index: $startStopIndex")
-            } else if (curIdx != startStopIndex && startStopDetectionCount > 1) {
-                // If we've already jumped to a new stop very quickly, our initial start was likely wrong
-                startStopIndex = curIdx
-                isStartStopConfirmed = true
-                Log.d(TAG, "Start stop corrected to: $startStopIndex")
-            }
-            startStopDetectionCount++
-        }
-
-        val deviation = calculatePolylineDeviation(lat, lon, lats, lons, curIdx)
-        val direction = checkRouteDirection(curIdx, prevIdx, destinationIndex)
-
-        // Calculate distance to next stop for UI sync
-        var distToNext = 0.0
-        val nextIdxForUi = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1
-        if (nextIdxForUi in route.stops.indices) {
-            val ns = route.stops[nextIdxForUi]
-            distToNext = calculateDistance(lat, lon, ns.lat, ns.lon)
-        }
-
-        // Notify activity (added distToNext and startStopIndex)
-        onUpdate?.invoke(lat, lon, curIdx, deviation, direction, distToNext, startStopIndex)
-
-        // Navigation Logic & TTS
+        
         val nextIdx = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1
         if (nextIdx in route.stops.indices) {
             val nextStop = route.stops[nextIdx]
-            val dist = calculateDistance(lat, lon, nextStop.lat, nextStop.lon)
-
-            updateNotification(getString(R.string.notif_next_stop, nextStop.name, dist.toInt()))
+            
+            updateNotification(getString(R.string.notif_next_stop, nextStop.name, distToNext.toInt()))
 
             // 150m Approach
-            if (dist <= 150.0 && lastAnnouncedNextIdx != nextIdx) {
+            if (distToNext <= 150.0 && lastAnnouncedNextIdx != nextIdx) {
                 val msg = if (nextIdx == destinationIndex) "İneceğiniz durağa yaklaştınız: ${nextStop.name}" else "Sıradaki durak: ${nextStop.name}"
                 speak(msg)
                 lastAnnouncedNextIdx = nextIdx
             }
 
             // 80m Target Reminder
-            if (nextIdx == destinationIndex && dist <= 80.0 && !hasAnnouncedTargetReminder) {
+            if (nextIdx == destinationIndex && distToNext <= 80.0 && !hasAnnouncedTargetReminder) {
                 speak("Durağa çok az kaldı. Lütfen kapıya doğru ilerleyin.")
                 hasAnnouncedTargetReminder = true
             }
@@ -263,8 +317,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
         // Departure from pre-dest
         val preDest = if (destinationIndex > 0) destinationIndex - 1 else -1
         if (curIdx == preDest) {
-            val dist = calculateDistance(lat, lon, lats[preDest], lons[preDest])
-            if (dist > 50.0 && !lastAnnouncedLeavingPreDest) {
+            val d = calculateDistance(lat, lon, lats[preDest], lons[preDest])
+            if (d > 50.0 && !lastAnnouncedLeavingPreDest) {
                 speak("Bir önceki duraktan hareket edildi. Bir sonraki durakta ineceksiniz. Lütfen hazırlanın.")
                 lastAnnouncedLeavingPreDest = true
             }
@@ -277,8 +331,6 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
             hasAnnouncedArrival = true
             updateNotification("HEDEFE VARILDI!")
         }
-
-        prevIdx = curIdx
     }
 
     private fun speak(text: String) {
@@ -316,5 +368,18 @@ class TrackingService : Service(), TextToSpeech.OnInitListener {
     override fun onDestroy() {
         tts?.shutdown()
         super.onDestroy()
+    }
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_LINEAR_ACCELERATION) {
+            accelXSum += event.values[0]
+            accelYSum += event.values[1]
+            accelZSum += event.values[2]
+            accelCount++
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
+        // No-op
     }
 }

@@ -3,13 +3,17 @@
     <item
         android:id="@+id/nav_tracking"
         android:icon="@android:drawable/ic_dialog_map"
-        android:title="Takip" />
+        android:title="@string/nav_tracking" />
+    <item
+        android:id="@+id/nav_map"
+        android:icon="@android:drawable/ic_menu_mapmode"
+        android:title="@string/nav_map" />
     <item
         android:id="@+id/nav_stats"
         android:icon="@android:drawable/ic_menu_sort_by_size"
-        android:title="İstatistik" />
+        android:title="@string/nav_stats" />
     <item
         android:id="@+id/nav_settings"
         android:icon="@android:drawable/ic_menu_preferences"
-        android:title="Ayarlar" />
+        android:title="@string/nav_settings" />
 </menu>
