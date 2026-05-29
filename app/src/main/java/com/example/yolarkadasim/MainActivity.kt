@@ -140,7 +140,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             requestPermissions()
         } catch (e: Exception) {
             Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e)
-            Toast.makeText(this, "Uygulama başlatılamadı: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -177,7 +176,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding.switchVoiceGuidance.isChecked = settingsStore.isVoiceGuidanceEnabled()
         binding.switchVoiceGuidance.setOnCheckedChangeListener { _, isChecked -> settingsStore.setVoiceGuidanceEnabled(isChecked) }
         binding.sliderVoiceLevel.value = settingsStore.getVoiceLevel().toFloat().coerceIn(0f, 100f)
-        binding.sliderVoiceLevel.setLabelFormatter { value -> value.toInt().toString() }
         binding.sliderVoiceLevel.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) { settingsStore.setVoiceLevel(slider.value.toInt()) }
@@ -254,7 +252,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             binding.layoutModern.visibility = View.GONE
             binding.switchUiMode.text = getString(R.string.mode_easy)
             if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) {
-                speakMessage("Kolay mod açıldı. Ekranda ortadaki dev tuş ile rota seçebilir, en alttaki butonla takibi başlatıp durdurabilirsiniz. Ayrıca sağ üstteki mikrofon tuşuna basarak sesli arama yapabilirsiniz.")
+                speakMessage("Kolay mod açıldı.")
             }
         }
     }
@@ -315,49 +313,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun processVoiceCommand(command: String) {
-        val cmd = command.lowercase(Locale("tr", "TR"))
-        val route = selectedRoute
-
-        if (route != null && cmd.length > 2) {
-            var matchedStop: BusStop? = null
-            for (stop in route.stops) {
-                val stopNameLower = stop.name.lowercase(Locale("tr", "TR"))
-                if (stopNameLower.contains(cmd) || cmd.contains(stopNameLower)) {
-                    matchedStop = stop
-                    break
-                }
-                val parts = stopNameLower.split("-", " ")
-                for (part in parts) {
-                    if (part.length > 3 && cmd.contains(part)) {
-                        matchedStop = stop
-                        break
-                    }
-                }
-                if (matchedStop != null) break
-            }
-
-            if (matchedStop != null) {
-                destinationStopIndex = route.stops.indexOf(matchedStop)
-                selectedDestinationStop = matchedStop
-                binding.textTargetStop.text = "Hedef: ${matchedStop.name}"
-                binding.textModernDest.text = matchedStop.name
-                
-                if (isTracking) {
-                    trackingService?.updateDestination(destinationStopIndex)
-                    speakMessage("${matchedStop.name} durağı yeni hedef olarak güncellendi.")
-                } else {
-                    speakMessage("${matchedStop.name} durağı hedef olarak seçildi. Takibi başlatabilirsiniz.")
-                    updateButtonState()
-                }
-                return
-            }
-        }
-
         if (!isTracking) { speakMessage(getString(R.string.tts_info_not_tracking)); return }
-        if (route == null) return
-
+        val route = selectedRoute ?: return
         when {
-            cmd.contains("nerede") || cmd.contains("durak") -> {
+            command.contains("nerede") || command.contains("durak") -> {
                 if (lastCurIdx in route.stops.indices) {
                     val currentStop = route.stops[lastCurIdx].name
                     val nextIdx = if (destinationStopIndex >= lastCurIdx) lastCurIdx + 1 else lastCurIdx - 1
@@ -365,9 +324,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     else speakMessage("Şu an $currentStop durağındasınız.")
                 }
             }
-            cmd.contains("kaç") || cmd.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
-            cmd.contains("mesafe") || cmd.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
-            cmd.contains("durdur") || cmd.contains("bitir") -> { stopTracking(); speakMessage("Takip durduruldu.") }
+            command.contains("kaç") || command.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
+            command.contains("mesafe") || command.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
+            command.contains("durdur") || command.contains("bitir") -> { stopTracking(); speakMessage("Takip durduruldu.") }
             else -> speakMessage(getString(R.string.tts_command_not_understood))
         }
     }
@@ -418,7 +377,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding.btnMapStartTracking.text = btnText
         binding.btnMapStartTracking.setBackgroundColor(ContextCompat.getColor(this, btnColor))
         binding.btnMapStartTracking.visibility = if (selectedRoute != null) View.VISIBLE else View.GONE
-        binding.cardMapTripInfo.visibility = if (isTracking) View.VISIBLE else View.GONE
     }
 
     private fun updateUi(lat: Double, lon: Double, curIdx: Int, deviation: Double, distance: Double, startIdx: Int, direction: Int) {
@@ -442,15 +400,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             val nextStop = route.stops[nextIdx]
             binding.textNextStop.text = "Sıradaki: ${nextStop.name}"
             binding.textModernNextStopName.text = nextStop.name
-            binding.textMapNextStop.text = "Sıradaki Durak: ${nextStop.name}"
-            
-            val remain = Math.abs(destinationStopIndex - curIdx)
-            binding.textRemainingStops.text = "Kalan Durak: $remain"
-            binding.textModernRemainingValue.text = "$remain"
-            binding.textMapRemainingStops.text = "Kalan Durak: $remain"
-            
+            binding.textRemainingStops.text = "Kalan Durak: ${Math.abs(destinationStopIndex - curIdx)}"
+            binding.textModernRemainingValue.text = "${Math.abs(destinationStopIndex - curIdx)}"
             binding.textModernDistValue.text = "${distance.toInt()} m"
-            binding.textMapDistance.text = "Mesafe: ${distance.toInt()} m"
             val tripStops = Math.abs(destinationStopIndex - startIdx).toFloat()
             val coveredStops = Math.abs(curIdx - startIdx).toFloat()
             val progress = if (tripStops > 0) ((coveredStops / tripStops) * 100).toInt().coerceIn(0, 100) else 100
@@ -467,16 +419,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (userMarker == null) {
                 userMarker = Marker(binding.mapView)
                 userMarker?.title = "Siz"
-                
-                val userDot = android.graphics.drawable.GradientDrawable()
-                userDot.shape = android.graphics.drawable.GradientDrawable.OVAL
-                userDot.setColor(android.graphics.Color.parseColor("#00E676")) // Bright visible green
-                userDot.setStroke(8, android.graphics.Color.WHITE)
-                userDot.setSize(90, 90) // Massive size for visibility
-                
-                userMarker?.icon = userDot
-                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                
+                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 binding.mapView.overlays.add(userMarker)
                 binding.mapView.controller.setZoom(16.0)
                 binding.mapView.controller.animateTo(userPos)
@@ -499,19 +442,12 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             routePolyline?.outlinePaint?.color = Color.parseColor("#2196F3")
             routePolyline?.outlinePaint?.strokeWidth = 10f
             binding.mapView.overlays.add(routePolyline)
-            val redCircle = android.graphics.drawable.GradientDrawable()
-            redCircle.shape = android.graphics.drawable.GradientDrawable.OVAL
-            redCircle.setColor(android.graphics.Color.RED)
-            redCircle.setStroke(3, android.graphics.Color.WHITE)
-            redCircle.setSize(40, 40)
-
             route.stops.forEachIndexed { index, stop ->
                 val p = GeoPoint(stop.lat, stop.lon)
                 val marker = Marker(binding.mapView)
                 marker.position = p
                 marker.title = stop.name
-                marker.icon = redCircle
-                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                 if (index == destinationStopIndex) marker.subDescription = "HEDEF"
                 stopMarkers.add(marker)
             }
