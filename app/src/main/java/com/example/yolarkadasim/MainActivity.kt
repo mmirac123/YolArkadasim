@@ -151,6 +151,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             setupTrackingButtons()
             setupVoiceCommands()
             setupSettingsPage()
+            setupStatsPage()
 
             requestPermissions()
         } catch (e: Exception) {
@@ -207,6 +208,51 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.valGpsDev.text = String.format(Locale.US, "%.1fm", statsStore.getAverageGpsDeviation())
             binding.valBatteryDrop.text = String.format(Locale.US, "%.1f%%", statsStore.getTotalBatteryConsumedPct())
         } catch (e: Exception) { Log.e("MainActivity", "Stats refresh error", e) }
+    }
+
+    private fun setupStatsPage() {
+        binding.btnExportCsv.setOnClickListener {
+            exportStatsToCsv()
+        }
+    }
+
+    private fun exportStatsToCsv() {
+        try {
+            val csvContent = buildString {
+                append("Metrik,Deger\n")
+                append("Toplam Sefer,${statsStore.getTotalTrips()}\n")
+                append("Toplam Test Edilen Mesafe (KM),${String.format(Locale.US, "%.1f", statsStore.getTotalDistanceKm())}\n")
+                append("Test Edilen Durak Sayisi,${statsStore.getTotalStops()}\n")
+                append("En Cok Kullanilan Hat,${statsStore.getMostUsedRoute()}\n")
+                append("Yanlis Yon Ikazi Sayisi,${statsStore.getWrongDirectionCount()}\n")
+                append("Ortalama GPS Sapmasi (Metre),${String.format(Locale.US, "%.1f", statsStore.getAverageGpsDeviation())}\n")
+                append("Toplam Pil Tuketimi (%),${String.format(Locale.US, "%.1f", statsStore.getTotalBatteryConsumedPct())}\n")
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val contentValues = android.content.ContentValues().apply {
+                    put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, "yolarkadasim_akademik_veriler_${System.currentTimeMillis()}.csv")
+                    put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                    put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                }
+
+                val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                if (uri != null) {
+                    contentResolver.openOutputStream(uri)?.use { it.write(csvContent.toByteArray()) }
+                    Toast.makeText(this, "Veriler İndirilenler klasörüne kaydedildi!", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(this, "Dosya oluşturulamadı", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+                val file = java.io.File(downloadsDir, "yolarkadasim_akademik_veriler_${System.currentTimeMillis()}.csv")
+                file.writeText(csvContent)
+                Toast.makeText(this, "Veriler İndirilenler klasörüne kaydedildi!", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "CSV kaydetme hatası", Toast.LENGTH_LONG).show()
+            Log.e("MainActivity", "Export CSV Error", e)
+        }
     }
 
     override fun onStart() {
