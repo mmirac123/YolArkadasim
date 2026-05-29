@@ -31,9 +31,11 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
 
     private lateinit var textTitle: TextView
     private lateinit var btnBack: MaterialButton
+    private lateinit var editSearchStop: EditText
     private lateinit var recyclerView: RecyclerView
     private lateinit var adapter: RouteSelectionAdapter
     private lateinit var favoritesStore: FavoritesStore
+    private var allStopOptions: List<SelectionOption> = emptyList()
 
     // Recent Destination UI
     private lateinit var layoutRecentDest: LinearLayout
@@ -102,7 +104,23 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
 
         textTitle = view.findViewById(R.id.textDialogTitle)
         btnBack = view.findViewById(R.id.btnDialogBack)
+        editSearchStop = view.findViewById(R.id.editSearchStop)
         recyclerView = view.findViewById(R.id.recyclerOptions)
+
+        editSearchStop.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString()?.trim()?.lowercase(Locale("tr", "TR")) ?: ""
+                if (selectedRoute != null) {
+                    val filtered = if (query.isEmpty()) allStopOptions else allStopOptions.filter {
+                        it.title.lowercase(Locale("tr", "TR")).contains(query) ||
+                        it.subtitle.lowercase(Locale("tr", "TR")).contains(query)
+                    }
+                    adapter.updateItems(filtered)
+                }
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
 
         layoutRecentDest = view.findViewById(R.id.layoutRecentDest)
         cardRecentDest = view.findViewById(R.id.cardRecentDest)
@@ -154,6 +172,8 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         textTitle.text = getString(R.string.select_route_title)
         btnBack.visibility = View.VISIBLE
         btnBack.text = "ANA EKRAN"
+        editSearchStop.visibility = View.GONE
+        editSearchStop.text.clear()
         layoutRecentDest.visibility = if (recentDestination != null) View.VISIBLE else View.GONE
 
         val favRoutes = favoritesStore.getFavoriteRoutes()
@@ -177,6 +197,8 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         textTitle.text = getString(R.string.select_stop_title)
         btnBack.visibility = View.VISIBLE
         btnBack.text = "← GERİ"
+        editSearchStop.visibility = View.VISIBLE
+        editSearchStop.text.clear()
         layoutRecentDest.visibility = View.GONE
 
         // Guidance for stop list
@@ -198,6 +220,7 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
             )
         }.sortedByDescending { it.isFavorite }
 
+        allStopOptions = options
         adapter.updateItems(options)
         recyclerView.scrollToPosition(0)
     }

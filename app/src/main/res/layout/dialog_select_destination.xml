@@ -28,6 +28,24 @@
         android:layout_height="wrap_content"
         app:dividerColor="@color/divider" />
 
+    <!-- Search bar for stops -->
+    <EditText
+        android:id="@+id/editSearchStop"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:hint="Durak Ara..."
+        android:textColorHint="@color/text_secondary"
+        android:textColor="@color/text_primary"
+        android:padding="16dp"
+        android:background="@drawable/bg_card_rounded"
+        android:drawableStart="@android:drawable/ic_menu_search"
+        android:drawablePadding="8dp"
+        android:inputType="text"
+        android:maxLines="1"
+        android:visibility="gone"
+        tools:visibility="visible" />
+
     <!-- Back button (visible in step 2: stop selection) -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/btnDialogBack"

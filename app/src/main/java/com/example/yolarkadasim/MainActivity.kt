@@ -432,8 +432,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val blueCircle = android.graphics.drawable.GradientDrawable()
                 blueCircle.shape = android.graphics.drawable.GradientDrawable.OVAL
                 blueCircle.setColor(android.graphics.Color.BLUE)
-                blueCircle.setStroke(4, android.graphics.Color.WHITE)
-                blueCircle.setSize(45, 45)
+                blueCircle.setStroke(6, android.graphics.Color.WHITE)
+                blueCircle.setSize(65, 65)
                 
                 userMarker?.icon = blueCircle
                 userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
