@@ -428,7 +428,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             if (userMarker == null) {
                 userMarker = Marker(binding.mapView)
                 userMarker?.title = "Siz"
-                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                
+                val blueCircle = android.graphics.drawable.GradientDrawable()
+                blueCircle.shape = android.graphics.drawable.GradientDrawable.OVAL
+                blueCircle.setColor(android.graphics.Color.BLUE)
+                blueCircle.setStroke(4, android.graphics.Color.WHITE)
+                blueCircle.setSize(45, 45)
+                
+                userMarker?.icon = blueCircle
+                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                
                 binding.mapView.overlays.add(userMarker)
                 binding.mapView.controller.setZoom(16.0)
                 binding.mapView.controller.animateTo(userPos)
