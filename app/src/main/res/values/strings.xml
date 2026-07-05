@@ -45,6 +45,12 @@
     <string name="cd_recent_dest">Son hedefiniz: %1$s, hat %2$s. Seçmek için dokunun.</string>
     <string name="tts_recent_dest_selected">Son hedefiniz seçildi: %1$s.</string>
 
+    <!-- Location Preflight (silent-failure shield) -->
+    <string name="tts_location_permission_needed">Takip için konum izni gerekli. Lütfen çıkan ekranda izin verin.</string>
+    <string name="tts_permission_granted_can_start">Konum izni verildi. Şimdi takibi başlatabilirsiniz.</string>
+    <string name="tts_gps_disabled">Telefonunuzun konum servisi kapalı. Takibin çalışması için konumu açmanız gerekiyor. Ayarlar ekranını açıyorum.</string>
+    <string name="tts_waiting_gps">GPS sinyali bekleniyor. Açık bir alandaysanız sinyal daha hızlı gelir. Lütfen bekleyin.</string>
+
     <!-- GPS Accuracy Warning -->
     <string name="gps_accuracy_low">⚠ GPS sinyali zayıf (%1$d m)</string>
     <string name="tts_gps_accuracy_low">Dikkat! GPS sinyali zayıf. Konum doğruluğu düşük olabilir.</string>

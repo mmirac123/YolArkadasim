@@ -10,6 +10,7 @@ import android.content.Intent
 import android.os.Binder
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.VibrationEffect
@@ -84,6 +85,17 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private lateinit var settingsStore: SettingsStore
     private var vibrator: Vibrator? = null
 
+    // GPS fix bekleme uyarısı: her şey açık ama sinyal gelmiyorsa (kapalı alan)
+    // kullanıcı sonsuz sessizlikte kalmasın
+    private var hasReceivedFix = false
+    private val gpsWaitHandler = Handler(Looper.getMainLooper())
+    private val gpsWaitRunnable = Runnable {
+        if (!hasReceivedFix && isTrackingActive) {
+            speak(getString(R.string.tts_waiting_gps))
+            vibrateShort()
+        }
+    }
+
     var onUpdate: ((Double, Double, Int, Double, Int, Double, Int) -> Unit)? = null
 
     var isTrackingActive = false
@@ -96,6 +108,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         private const val NOTIF_ID = 101
         private const val TAG = "TrackingService"
         private const val WRONG_DIRECTION_COOLDOWN_MS = 30_000L
+        private const val GPS_WAIT_TIMEOUT_MS = 20_000L
 
         const val EXTRA_ROUTE_ID = "extra_route_id"
         const val EXTRA_DEST_IDX = "extra_dest_idx"
@@ -221,6 +234,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         sessionWrongDirectionCount = 0
         lastDirectionState = 0
 
+        hasReceivedFix = false
+        gpsWaitHandler.removeCallbacks(gpsWaitRunnable)
+        gpsWaitHandler.postDelayed(gpsWaitRunnable, GPS_WAIT_TIMEOUT_MS)
+
         try {
             val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
             startBatteryLevel = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -246,6 +263,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     fun stopTracking() {
         isTrackingActive = false
+        gpsWaitHandler.removeCallbacks(gpsWaitRunnable)
         try {
             val stats = StatsStore(this)
             stats.addGpsDeviationBatch(sessionGpsDeviationSum, sessionGpsDeviationCount)
@@ -309,6 +327,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     private fun processLocation(location: android.location.Location) {
         try {
+            if (!hasReceivedFix) {
+                hasReceivedFix = true
+                gpsWaitHandler.removeCallbacks(gpsWaitRunnable)
+            }
             val lat = location.latitude
             val lon = location.longitude
             val speed = location.speed
@@ -488,6 +510,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     override fun onDestroy() {
         // Sistem servisi stopTracking çağrılmadan öldürürse GPS ve sensör
         // dinleyicileri açık kalmasın (batarya sızıntısı)
+        gpsWaitHandler.removeCallbacks(gpsWaitRunnable)
         try { locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) } } catch (e: Exception) { Log.e(TAG, "Loc cleanup fail", e) }
         try { sensorManager.unregisterListener(this) } catch (e: Exception) { Log.e(TAG, "Sensor cleanup fail", e) }
         tts?.shutdown()

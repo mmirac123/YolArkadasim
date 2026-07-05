@@ -11,8 +11,10 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.LocationManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -431,7 +433,36 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun startTrackingIfReady() {
         if (selectedRoute == null || destinationStopIndex < 0) { speakMessage(getString(R.string.tts_select_stop_first)); showRouteSelectionDialog(); return }
+        if (!locationReadyOrGuide()) return
         startTracking()
+    }
+
+    /**
+     * Takip öncesi konum önkoşullarını kontrol eder. Bu kitle için sessiz
+     * başarısızlık (buton "Durdur" der ama hiçbir anons gelmez) en kötü sonuç;
+     * her engelde sesli yönlendirme verir ve düzeltme yolunu açar.
+     * @return true ise takip başlatılabilir
+     */
+    private fun locationReadyOrGuide(): Boolean {
+        val fine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+        val coarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+        if (fine != PackageManager.PERMISSION_GRANTED && coarse != PackageManager.PERMISSION_GRANTED) {
+            speakMessage(getString(R.string.tts_location_permission_needed))
+            ActivityCompat.requestPermissions(this,
+                arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION), 1001)
+            return false
+        }
+        val locationOn = try {
+            val lm = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) lm.isLocationEnabled
+            else lm.isProviderEnabled(LocationManager.GPS_PROVIDER) || lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        } catch (e: Exception) { true } // kontrol edilemezse engelleme, servis kendi hatasını loglar
+        if (!locationOn) {
+            speakMessage(getString(R.string.tts_gps_disabled))
+            try { startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) } catch (e: Exception) { Log.e("MainActivity", "Open loc settings fail", e) }
+            return false
+        }
+        return true
     }
 
     private fun startTracking() {
@@ -563,6 +594,14 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 1002 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) speechManager.startListening()
+        // Takip için konum izni istendikten sonra: verildiyse kullanıcıyı sessiz bırakma
+        if (requestCode == 1001) {
+            val locationGranted = permissions.withIndex().any { (i, p) ->
+                (p == Manifest.permission.ACCESS_FINE_LOCATION || p == Manifest.permission.ACCESS_COARSE_LOCATION) &&
+                    grantResults.getOrNull(i) == PackageManager.PERMISSION_GRANTED
+            }
+            if (locationGranted) speakMessage(getString(R.string.tts_permission_granted_can_start))
+        }
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
