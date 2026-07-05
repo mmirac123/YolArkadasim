@@ -55,6 +55,20 @@
         android:contentDescription="@string/cd_onboarding_button"
         app:backgroundTint="@color/accent_green"
         app:cornerRadius="24dp"
+        app:layout_constraintBottom_toTopOf="@id/textOnboardingPrivacy"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <TextView
+        android:id="@+id/textOnboardingPrivacy"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:padding="8dp"
+        android:text="@string/privacy_link"
+        android:textColor="@color/accent_blue"
+        android:textSize="16sp"
+        android:textStyle="bold"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />

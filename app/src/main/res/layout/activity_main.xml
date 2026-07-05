@@ -700,6 +700,18 @@
                             </LinearLayout>
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnPrivacyPolicy"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:minHeight="52dp"
+                        android:text="@string/settings_privacy"
+                        android:textColor="@color/accent_blue"
+                        app:icon="@android:drawable/ic_menu_info_details"
+                        app:iconTint="@color/accent_blue"
+                        style="@style/Widget.Material3.Button.OutlinedButton" />
                 </LinearLayout>
                 </ScrollView>
             </androidx.constraintlayout.widget.ConstraintLayout>

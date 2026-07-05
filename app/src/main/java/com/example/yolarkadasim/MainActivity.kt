@@ -247,6 +247,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             settingsStore.setEmergencyContact(phone)
             Toast.makeText(this, getString(R.string.settings_emergency_saved), Toast.LENGTH_SHORT).show()
         }
+        binding.btnPrivacyPolicy.setOnClickListener {
+            startActivity(Intent(this, PrivacyActivity::class.java))
+        }
     }
 
     private fun refreshStatsUi() {

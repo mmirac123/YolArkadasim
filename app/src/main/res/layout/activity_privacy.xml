@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/surface_dark"
+    android:padding="24dp">
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnPrivacyBack"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:minHeight="52dp"
+        android:text="@string/dialog_back"
+        android:textColor="@color/accent_blue"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:contentDescription="@string/cd_back_button"
+        style="@style/Widget.Material3.Button.TextButton" />
+
+    <TextView
+        android:id="@+id/textPrivacyTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/privacy_title"
+        android:textColor="@color/text_primary"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp"
+        android:accessibilityHeading="true" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scrollbars="vertical">
+
+        <TextView
+            android:id="@+id/textPrivacyBody"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/privacy_body"
+            android:textColor="@color/text_secondary"
+            android:textSize="17sp"
+            android:lineSpacingMultiplier="1.2"
+            android:paddingBottom="24dp" />
+    </ScrollView>
+
+</LinearLayout>

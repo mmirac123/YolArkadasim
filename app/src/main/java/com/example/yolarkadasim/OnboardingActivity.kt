@@ -36,6 +36,9 @@ class OnboardingActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             try { tts?.stop() } catch (e: Exception) { Log.e(TAG, "tts stop fail", e) }
             requestAllPermissions()
         }
+        binding.textOnboardingPrivacy.setOnClickListener {
+            startActivity(android.content.Intent(this, PrivacyActivity::class.java))
+        }
     }
 
     override fun onInit(status: Int) {
