@@ -45,6 +45,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
 
+    // TTS başlatması asenkron: hazır olmadan istenen anonslar (ör. REDELIVER
+    // kurtarma anonsu, hızlı gelen ilk biniş anonsu) düşmesin diye kuyruklanır
+    private val pendingSpeech = mutableListOf<Pair<String, Boolean>>()
+
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
 
@@ -191,6 +195,11 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
             applyTtsSettings()
             isTtsReady = true
+            // Bekleyen anonsları sırayla oynat (QUEUE_ADD: birbirlerini kesmesinler)
+            val queued = synchronized(pendingSpeech) {
+                val copy = pendingSpeech.toList(); pendingSpeech.clear(); copy
+            }
+            for ((text, _) in queued) speak(text, urgent = false)
         }
     }
 
@@ -438,7 +447,13 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
      *               false: kuyruğa eklenir, süren anons yarıda kalmaz.
      */
     fun speak(text: String, urgent: Boolean = true) {
-        if (!isTtsReady) return
+        if (!isTtsReady) {
+            // Sessizce düşürme: TTS hazır olunca onInit sırayla oynatır
+            synchronized(pendingSpeech) {
+                if (pendingSpeech.size < 8) pendingSpeech.add(text to urgent)
+            }
+            return
+        }
         val queueMode = if (urgent) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         val params = Bundle().apply {
             putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, (settingsStore.getVoiceLevel() / 100f).coerceIn(0f, 1f))
