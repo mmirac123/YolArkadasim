@@ -15,10 +15,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.View
 import android.widget.Toast
@@ -36,13 +32,14 @@ import com.example.yolarkadasim.databinding.ActivityMainBinding
 import com.example.yolarkadasim.service.TrackingService
 import com.example.yolarkadasim.ui.MapController
 import com.example.yolarkadasim.ui.RouteSelectionDialog
+import com.example.yolarkadasim.ui.SpeechManager
 import com.example.yolarkadasim.util.StopMatcher
 import com.google.android.material.slider.Slider
 import org.osmdroid.config.Configuration
 import java.util.Locale
 import kotlin.math.sqrt
 
-class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEventListener {
+class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var routeRepository: RouteRepository
@@ -59,11 +56,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var selectedDestinationStop: BusStop? = null
     private var destinationStopIndex: Int = -1
 
-    private var tts: TextToSpeech? = null
-    private var isTtsReady = false
-
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var speechIntent: Intent? = null
+    private lateinit var speechManager: SpeechManager
 
     private lateinit var sensorManager: SensorManager
     private var accelerometer: Sensor? = null
@@ -171,7 +164,15 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             recentDestStore = RecentDestinationStore(this)
             statsStore = StatsStore(this)
             settingsStore = SettingsStore(this)
-            tts = TextToSpeech(this, this)
+            speechManager = SpeechManager(this, settingsStore, ::processVoiceCommand, ::speakMessage)
+            speechManager.onTtsReady = {
+                // Kolay modda ve rehber açıksa açılışta yönergeyi seslendir
+                if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
+                    binding.root.postDelayed({
+                        if (!isFinishing && !isDestroyed) speakGuidedWalkthrough()
+                    }, 1000)
+                }
+            }
             sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
             mapController = MapController(binding.mapView, binding.fabMapFollowMe)
@@ -221,7 +222,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) {
                 settingsStore.setSpeechRate(slider.value.toInt())
-                try { tts?.setSpeechRate(slider.value / 100f) } catch (e: Exception) {}
+                speechManager.applySpeechRate()
                 trackingService?.applyTtsSettings()
                 speakMessage("Konuşma hızı böyle duyulacak.") // anında örnek ver
             }
@@ -287,24 +288,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     override fun onDestroy() {
-        try { speechRecognizer?.destroy() } catch (e: Exception) {}
-        speechRecognizer = null
-        try { tts?.shutdown() } catch (e: Exception) {}
+        speechManager.shutdown()
         mapController.onDetach() // osmdroid kaynaklarını bırak
         super.onDestroy()
-    }
-
-    override fun onInit(status: Int) {
-        if (status == TextToSpeech.SUCCESS) {
-            tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
-            try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) { Log.e("MainActivity", "TTS rate fail", e) }
-            isTtsReady = true
-            if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
-                binding.root.postDelayed({
-                    if (!isFinishing && !isDestroyed) speakGuidedWalkthrough()
-                }, 1000)
-            }
-        }
     }
 
     private fun speakGuidedWalkthrough() {
@@ -323,7 +309,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private fun updateUiMode(isModern: Boolean) {
         if (isModern) {
             // Stop any ongoing speech when switching to Modern Mode
-            try { tts?.stop() } catch (e: Exception) {}
+            speechManager.stopSpeaking()
 
             binding.layoutAccessibility.visibility = View.GONE
             binding.layoutModern.visibility = View.VISIBLE
@@ -333,7 +319,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.layoutAccessibility.visibility = View.VISIBLE
             binding.layoutModern.visibility = View.GONE
             binding.switchUiMode.text = getString(R.string.mode_easy)
-            if (isTtsReady && settingsStore.isVoiceGuidanceEnabled()) speakGuidedWalkthrough()
+            if (speechManager.isTtsReady && settingsStore.isVoiceGuidanceEnabled()) speakGuidedWalkthrough()
         }
     }
 
@@ -351,56 +337,14 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     private fun setupVoiceCommands() {
-        try {
-            if (SpeechRecognizer.isRecognitionAvailable(this)) {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-                speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "tr-TR")
-                }
-                speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-                    override fun onResults(results: Bundle?) {
-                        val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) processVoiceCommand(matches[0].lowercase(Locale.forLanguageTag("tr-TR")))
-                        else speakMessage(getString(R.string.tts_command_not_understood))
-                    }
-                    override fun onReadyForSpeech(params: Bundle?) {}
-                    override fun onBeginningOfSpeech() {}
-                    override fun onRmsChanged(rmsdB: Float) {}
-                    override fun onBufferReceived(buffer: ByteArray?) {}
-                    override fun onEndOfSpeech() {}
-                    override fun onError(error: Int) {
-                        // Görme engelli/yaşlı kullanıcı mikrofonun dinlemediğini göremez;
-                        // sessiz kalmak yerine sesli geri bildirim ver.
-                        when (error) {
-                            SpeechRecognizer.ERROR_NO_MATCH,
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> speakMessage(getString(R.string.tts_not_heard))
-                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
-                            SpeechRecognizer.ERROR_CLIENT -> { /* geçici durum, anons spam'lemeyelim */ }
-                            else -> speakMessage(getString(R.string.tts_mic_error))
-                        }
-                    }
-                    override fun onPartialResults(partialResults: Bundle?) {}
-                    override fun onEvent(eventType: Int, params: Bundle?) {}
-                })
-            }
-        } catch (e: Exception) { Log.e("MainActivity", "STT setup fail", e) }
+        speechManager.setupRecognizer()
         binding.fabVoiceCommand.setOnClickListener {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1002)
                 return@setOnClickListener
             }
-            startListening()
+            speechManager.startListening()
         }
-    }
-
-    private fun startListening() {
-        speakMessage(getString(R.string.tts_listening))
-        binding.fabVoiceCommand.postDelayed({
-            if (!isFinishing && !isDestroyed) {
-                try { speechRecognizer?.startListening(speechIntent) } catch (e: Exception) {}
-            }
-        }, 500)
     }
 
     private fun processVoiceCommand(command: String) {
@@ -480,7 +424,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             svc.speak(message)
             return
         }
-        if (isTtsReady) tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "voice_cmd")
+        speechManager.speakLocal(message)
     }
 
     private fun toggleTracking() { if (isTracking) stopTracking() else startTrackingIfReady() }
@@ -618,7 +562,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1002 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) startListening()
+        if (requestCode == 1002 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) speechManager.startListening()
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -629,7 +573,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             if (gForce > SHAKE_THRESHOLD) {
                 if (now - lastShakeTime > 2000) {
                     lastShakeTime = now
-                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startListening()
+                    if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) speechManager.startListening()
                 }
             }
         }
