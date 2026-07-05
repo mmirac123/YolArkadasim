@@ -82,6 +82,26 @@ class StatsStore(context: Context) {
     
     fun getTotalBatteryConsumedPct(): Float = prefs.getFloat("total_battery_drop_pct", 0f)
 
+    /**
+     * Tüm metrikleri akademik kullanım için CSV olarak üretir.
+     * Sayısal format Locale.US ile sabitlenir ki ondalık ayracı her cihazda nokta olsun.
+     */
+    fun buildCsvExport(): String {
+        val sb = StringBuilder()
+        sb.appendLine("metric,value")
+        sb.appendLine("total_trips,${getTotalTrips()}")
+        sb.appendLine("total_distance_km,${String.format(java.util.Locale.US, "%.3f", getTotalDistanceKm())}")
+        sb.appendLine("total_stops_passed,${getTotalStops()}")
+        sb.appendLine("most_used_route,${getMostUsedRoute()}")
+        sb.appendLine("wrong_direction_events,${getWrongDirectionCount()}")
+        sb.appendLine("avg_gps_deviation_m,${String.format(java.util.Locale.US, "%.2f", getAverageGpsDeviation())}")
+        sb.appendLine("total_battery_consumed_pct,${String.format(java.util.Locale.US, "%.1f", getTotalBatteryConsumedPct())}")
+        for ((routeId, count) in getRouteUsageCounts()) {
+            sb.appendLine("route_usage_$routeId,$count")
+        }
+        return sb.toString()
+    }
+
     private fun getRouteUsageCounts(): Map<String, Int> {
         val data = prefs.getString("route_counts", "") ?: ""
         if (data.isBlank()) return emptyMap()

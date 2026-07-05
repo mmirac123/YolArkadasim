@@ -9,8 +9,12 @@ import android.content.Context
 import android.content.Intent
 import android.os.Binder
 import android.os.Build
+import android.os.Bundle
 import android.os.IBinder
 import android.os.Looper
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -18,6 +22,8 @@ import com.example.yolarkadasim.MainActivity
 import com.example.yolarkadasim.R
 import com.example.yolarkadasim.data.BusRoute
 import com.example.yolarkadasim.data.BusStop
+import com.example.yolarkadasim.data.RouteRepository
+import com.example.yolarkadasim.data.SettingsStore
 import com.example.yolarkadasim.data.StatsStore
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -73,13 +79,26 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private var sessionGpsDeviationCount = 0
     private var sessionWrongDirectionCount = 0
     private var lastDirectionState = 0
+    private var lastWrongDirectionAnnounceMs = 0L
+
+    private lateinit var settingsStore: SettingsStore
+    private var vibrator: Vibrator? = null
 
     var onUpdate: ((Double, Double, Int, Double, Int, Double, Int) -> Unit)? = null
+
+    var isTrackingActive = false
+        private set
+    val currentRoute: BusRoute? get() = selectedRoute
+    val currentDestinationIndex: Int get() = destinationIndex
 
     companion object {
         private const val CHANNEL_ID = "tracking_channel"
         private const val NOTIF_ID = 101
         private const val TAG = "TrackingService"
+        private const val WRONG_DIRECTION_COOLDOWN_MS = 30_000L
+
+        const val EXTRA_ROUTE_ID = "extra_route_id"
+        const val EXTRA_DEST_IDX = "extra_dest_idx"
 
         init {
             System.loadLibrary("yolarkadasim")
@@ -90,6 +109,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     external fun getEngineDeviation(): Double
     external fun checkRouteDirection(curIdx: Int, prevIdx: Int, destIdx: Int): Int
     external fun initNavigationEngine(storagePath: String, enableLogging: Boolean)
+    external fun resetEngine()
     external fun setEngineRoute(lats: DoubleArray, lons: DoubleArray)
     external fun processEngineLocation(lat: Double, lon: Double, speed: Float, bearing: Float, accuracy: Float, accelX: Float, accelY: Float, accelZ: Float, timestamp: Long)
     external fun getEngineActiveStopIndex(): Int
@@ -103,10 +123,17 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     override fun onCreate() {
         super.onCreate()
+        settingsStore = SettingsStore(this)
         tts = TextToSpeech(this, this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
         linearAccelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION)
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
         createNotificationChannel()
     }
 
@@ -119,19 +146,43 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         } else {
             startForeground(NOTIF_ID, notification)
         }
-        
+
         linearAccelSensor?.let {
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
         }
-        
-        return START_NOT_STICKY
+
+        // Sistem servisi öldürüp intent'i yeniden teslim ettiyse yolculuğu kaldığı yerden kur.
+        // Normal akışta Activity binder üzerinden startTracking çağırır; extras sadece
+        // kurtarma senaryosunda kullanılır.
+        if (!isTrackingActive) {
+            val routeId = intent?.getStringExtra(EXTRA_ROUTE_ID)
+            val destIdx = intent?.getIntExtra(EXTRA_DEST_IDX, -1) ?: -1
+            if (routeId != null && destIdx >= 0) {
+                try {
+                    val repo = RouteRepository(applicationContext)
+                    val route = repo.getRouteById(routeId)
+                    if (route != null && destIdx < route.stops.size) {
+                        startTracking(route, destIdx, repo.getStopLatitudes(route), repo.getStopLongitudes(route))
+                        speak(getString(R.string.tts_tracking_restored))
+                    }
+                } catch (e: Exception) { Log.e(TAG, "Trip restore failed", e) }
+            }
+        }
+
+        return START_REDELIVER_INTENT
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.setLanguage(Locale("tr", "TR"))
+            applyTtsSettings()
             isTtsReady = true
         }
+    }
+
+    /** Ayarlardaki konuşma hızını uygular (yaşlı kullanıcılar için yavaşlatılabilir). */
+    fun applyTtsSettings() {
+        try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) { Log.e(TAG, "TTS rate fail", e) }
     }
 
     fun updateDestination(newDestIndex: Int) {
@@ -139,6 +190,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         hasAnnouncedTargetReminder = false
         hasAnnouncedArrival = false
         lastAnnouncedLeavingPreDest = false
+        lastAnnouncedNextIdx = -1
         selectedRoute?.stops?.getOrNull(newDestIndex)?.let {
             val notification = createNotification("Yeni Hedef: ${it.name}")
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -147,6 +199,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     fun startTracking(route: BusRoute, destIdx: Int, lats: DoubleArray, lons: DoubleArray) {
+        isTrackingActive = true
         selectedRoute = route
         destinationIndex = destIdx
         stopLats = lats
@@ -173,6 +226,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
         val logPath = applicationContext.getExternalFilesDir(null)?.absolutePath ?: applicationContext.filesDir.absolutePath
         initNavigationEngine(logPath, false)
+        resetEngine() // Önceki seyahatin Kalman/FSM durumu yeni seyahate taşınmasın
         setEngineRoute(lats, lons)
 
         try {
@@ -189,6 +243,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     fun stopTracking() {
+        isTrackingActive = false
         try {
             val stats = StatsStore(this)
             stats.addGpsDeviationBatch(sessionGpsDeviationSum, sessionGpsDeviationCount)
@@ -273,9 +328,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
                 val totalStops = Math.abs(destinationIndex - startStopIndex)
 
                 if (distToStop <= 35.0) {
-                    speak("${stopName} durağından biniş algılandı. Hedefinize ${totalStops} durak kaldı.")
+                    speak(getString(R.string.tts_boarding_detected, stopName, totalStops))
+                    vibrateDouble()
                 } else {
-                    speak("En yakın biniş durağı: ${stopName}. Lütfen durağa gidiniz. Yolculuğunuz ${totalStops} durak sürecek.")
+                    speak(getString(R.string.tts_walk_to_stop, stopName, totalStops))
                 }
             }
 
@@ -286,6 +342,13 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             sessionGpsDeviationCount++
             if (direction == 1 && lastDirectionState != 1) {
                 sessionWrongDirectionCount++
+                val now = System.currentTimeMillis()
+                if (now - lastWrongDirectionAnnounceMs > WRONG_DIRECTION_COOLDOWN_MS) {
+                    lastWrongDirectionAnnounceMs = now
+                    speak(getString(R.string.tts_wrong_bus_direction))
+                    vibrateWarning()
+                    updateNotification(getString(R.string.notif_wrong_direction))
+                }
             }
             lastDirectionState = direction
 
@@ -311,12 +374,17 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             val nextStop = route.stops[nextIdx]
             updateNotification(getString(R.string.notif_next_stop, nextStop.name, distToNext.toInt()))
             if (distToNext <= 150.0 && lastAnnouncedNextIdx != nextIdx) {
-                val msg = if (nextIdx == destinationIndex) "İneceğiniz durağa yaklaştınız: ${nextStop.name}" else "Sıradaki durak: ${nextStop.name}"
-                speak(msg)
+                if (nextIdx == destinationIndex) {
+                    speak(getString(R.string.tts_arriving, nextStop.name))
+                    vibrateDouble()
+                } else {
+                    speak(getString(R.string.tts_next_stop, nextStop.name), urgent = false)
+                    vibrateShort()
+                }
                 lastAnnouncedNextIdx = nextIdx
             }
             if (nextIdx == destinationIndex && distToNext <= 80.0 && !hasAnnouncedTargetReminder) {
-                speak("Durağa çok az kaldı. Lütfen kapıya doğru ilerleyin.")
+                speak(getString(R.string.tts_prepare_to_exit))
                 hasAnnouncedTargetReminder = true
             }
         }
@@ -325,22 +393,54 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         if (curIdx == preDest) {
             val d = calculateDistance(lat, lon, lats[preDest], lons[preDest])
             if (d > 50.0 && !lastAnnouncedLeavingPreDest) {
-                speak("Bir önceki duraktan hareket edildi. Bir sonraki durakta ineceksiniz. Lütfen hazırlanın.")
+                speak(getString(R.string.tts_next_is_destination))
+                vibrateDouble()
                 lastAnnouncedLeavingPreDest = true
             }
         }
 
         val distToDest = calculateDistance(lat, lon, lats[destinationIndex], lons[destinationIndex])
         if (curIdx == destinationIndex && distToDest < 35.0 && !hasAnnouncedArrival) {
-            speak("İneceğiniz durağa geldiniz. Lütfen ininiz.")
+            speak(getString(R.string.tts_arrived_get_off))
+            vibrateArrival()
             hasAnnouncedArrival = true
-            updateNotification("HEDEFE VARILDI!")
+            updateNotification(getString(R.string.notif_arrived))
         }
     }
 
-    private fun speak(text: String) {
-        if (isTtsReady) tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "track_svc")
+    /**
+     * Tüm sesli anonsların tek çıkış noktası. Activity de takip sırasında buraya
+     * yönlendirir; böylece iki TTS birbirinin sözünü kesmez.
+     * @param urgent true: mevcut anonsu keser (varış, yanlış yön gibi kritik uyarılar);
+     *               false: kuyruğa eklenir, süren anons yarıda kalmaz.
+     */
+    fun speak(text: String, urgent: Boolean = true) {
+        if (!isTtsReady) return
+        val queueMode = if (urgent) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
+        val params = Bundle().apply {
+            putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, (settingsStore.getVoiceLevel() / 100f).coerceIn(0f, 1f))
+        }
+        tts?.speak(text, queueMode, params, "track_svc")
     }
+
+    // Titreşim kalıpları: görme/işitme zorluğu yaşayan kullanıcı için sesin yanında
+    // ikinci bir kanal. Kalıplar birbirinden ayırt edilebilir olacak şekilde seçildi.
+    private fun vibrate(pattern: LongArray) {
+        try {
+            val v = vibrator ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                v.vibrate(VibrationEffect.createWaveform(pattern, -1))
+            } else {
+                @Suppress("DEPRECATION")
+                v.vibrate(pattern, -1)
+            }
+        } catch (e: Exception) { Log.e(TAG, "Vibrate fail", e) }
+    }
+
+    private fun vibrateShort() = vibrate(longArrayOf(0, 150))                       // sıradaki durak
+    private fun vibrateDouble() = vibrate(longArrayOf(0, 250, 150, 250))            // hedefe yaklaşma / biniş
+    private fun vibrateArrival() = vibrate(longArrayOf(0, 600, 200, 600, 200, 600)) // varış
+    private fun vibrateWarning() = vibrate(longArrayOf(0, 400, 100, 400, 100, 400, 100, 400)) // yanlış yön
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

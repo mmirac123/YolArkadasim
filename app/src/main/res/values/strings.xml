@@ -88,4 +88,46 @@
     <string name="tts_listening">Dinliyorum, komutunuzu söyleyin</string>
     <string name="tts_command_not_understood">Anlaşılamadı, lütfen tekrar söyleyin</string>
     <string name="tts_info_not_tracking">Takip aktif değil, önce bir durak seçip takibi başlatın</string>
+    <string name="tts_not_heard">Sizi duyamadım. Lütfen mikrofon butonuna basıp tekrar deneyin.</string>
+    <string name="tts_mic_error">Mikrofon şu anda kullanılamıyor. Lütfen biraz sonra tekrar deneyin.</string>
+    <string name="tts_stop_not_found">Söylediğiniz durağı bulamadım. Lütfen durak adını tekrar söyleyin.</string>
+
+    <!-- Service Announcements -->
+    <string name="tts_tracking_restored">Takip yeniden başlatıldı. Yolculuğunuz kaldığı yerden devam ediyor.</string>
+    <string name="tts_boarding_detected">%1$s durağından biniş algılandı. Hedefinize %2$d durak kaldı.</string>
+    <string name="tts_walk_to_stop">En yakın biniş durağı: %1$s. Lütfen durağa gidiniz. Yolculuğunuz %2$d durak sürecek.</string>
+    <string name="tts_prepare_to_exit">Durağa çok az kaldı. Lütfen kapıya doğru ilerleyin.</string>
+    <string name="tts_next_is_destination">Bir önceki duraktan hareket edildi. Bir sonraki durakta ineceksiniz. Lütfen hazırlanın.</string>
+    <string name="tts_arrived_get_off">İneceğiniz durağa geldiniz. Lütfen ininiz.</string>
+    <string name="notif_wrong_direction">DİKKAT: Yanlış yöne gidiyorsunuz!</string>
+    <string name="notif_arrived">HEDEFE VARILDI!</string>
+
+    <!-- Emergency / Help -->
+    <string name="btn_help">YARDIM İSTE</string>
+    <string name="cd_help_button">Yardım iste. Kayıtlı yakınınızı arar.</string>
+    <string name="tts_calling_contact">Yakınınız aranıyor. Telefonda arama tuşuna basın.</string>
+    <string name="tts_no_contact">Kayıtlı yakın numarası yok. Lütfen ayarlar sayfasından bir yakınınızın numarasını kaydedin.</string>
+    <string name="settings_emergency_title">Yardım Butonu: Yakın Telefonu</string>
+    <string name="settings_emergency_hint">Örn: 05321234567</string>
+    <string name="settings_emergency_save">KAYDET</string>
+    <string name="settings_emergency_saved">Yakın numarası kaydedildi</string>
+
+    <!-- Settings -->
+    <string name="settings_speech_rate">Konuşma Hızı</string>
+    <string name="settings_voice_level">Ses Seviyesi</string>
+    <string name="settings_startup_modern">Açılış Modu: Modern</string>
+    <string name="settings_auto_voice_guide">Otomatik Sesli Rehber</string>
+
+    <!-- Misc UI -->
+    <string name="destination_format">Hedef: %1$s</string>
+    <string name="route_arrow_format">Hat %1$s → %2$s</string>
+    <string name="tts_select_stop_first">Önce durak seçiniz.</string>
+    <string name="tts_new_destination_set">%1$s durağı yeni hedef olarak ayarlandı.</string>
+    <string name="tts_destination_selected">%1$s durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
+    <string name="tts_tracking_stopped_voice">Takip durduruldu.</string>
+
+    <!-- CSV Export -->
+    <string name="btn_export_csv">Akademik Verileri CSV Olarak İndir</string>
+    <string name="csv_export_done">Veriler CSV dosyasına kaydedildi</string>
+    <string name="csv_export_failed">CSV kaydedilemedi</string>
 </resources>

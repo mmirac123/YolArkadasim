@@ -19,6 +19,7 @@ void NavigationFSM::setRoute(const std::vector<double>& lats, const std::vector<
         route.push_back({lats[i], lons[i], StopState::APPROACHING});
     }
     active_target_index = -1;
+    last_cross_track_error = 0.0;
 }
 
 double NavigationFSM::distanceMeters(double lat1, double lon1, double lat2, double lon2) {

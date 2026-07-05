@@ -11,6 +11,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -21,6 +22,7 @@ import android.speech.tts.TextToSpeech
 import android.util.Log
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -33,6 +35,7 @@ import com.example.yolarkadasim.data.StatsStore
 import com.example.yolarkadasim.databinding.ActivityMainBinding
 import com.example.yolarkadasim.service.TrackingService
 import com.example.yolarkadasim.ui.RouteSelectionDialog
+import com.example.yolarkadasim.util.StopMatcher
 import com.google.android.material.slider.Slider
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
@@ -54,6 +57,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var trackingService: TrackingService? = null
     private var isBound = false
     private var isTracking = false
+    private var pendingTrackingStart = false
 
     private var selectedRoute: BusRoute? = null
     private var selectedDestinationStop: BusStop? = null
@@ -80,6 +84,20 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var routePolyline: Polyline? = null
     private val stopMarkers = mutableListOf<Marker>()
 
+    // SAF ile CSV dışa aktarma: izin gerektirmez, kullanıcı konumu kendi seçer
+    private val csvExportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        if (uri == null) return@registerForActivityResult
+        try {
+            contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(statsStore.buildCsvExport().toByteArray(Charsets.UTF_8))
+            }
+            Toast.makeText(this, getString(R.string.csv_export_done), Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("MainActivity", "CSV export fail", e)
+            Toast.makeText(this, getString(R.string.csv_export_failed), Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private val serviceConnection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
             try {
@@ -89,11 +107,40 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 trackingService?.onUpdate = { lat, lon, curIdx, deviation, direction, distance, startIdx ->
                     handleUpdate(lat, lon, curIdx, deviation, direction, distance, startIdx)
                 }
+                syncStateFromService()
+                if (pendingTrackingStart) {
+                    pendingTrackingStart = false
+                    doStartTracking()
+                }
             } catch (e: Exception) { Log.e("MainActivity", "Service bind fail", e) }
         }
         override fun onServiceDisconnected(name: ComponentName?) {
             isBound = false
             trackingService = null
+        }
+    }
+
+    // Activity yeniden bağlandığında (ör. uygulamaya geri dönüldüğünde) servisin
+    // gerçek durumunu UI'a yansıtır; servis arkada takipteyken buton "Başlat" göstermez.
+    private fun syncStateFromService() {
+        val service = trackingService ?: return
+        if (service.isTrackingActive) {
+            val route = service.currentRoute ?: return
+            selectedRoute = route
+            destinationStopIndex = service.currentDestinationIndex
+            selectedDestinationStop = route.stops.getOrNull(destinationStopIndex)
+            isTracking = true
+            binding.layoutRouteInfo.visibility = View.VISIBLE
+            selectedDestinationStop?.let { stop ->
+                binding.textDestinationInfo.text = getString(R.string.destination_format, stop.name)
+                binding.textModernRouteName.text = getString(R.string.route_arrow_format, route.routeId, stop.name)
+                binding.textMapRouteName.text = getString(R.string.route_arrow_format, route.routeId, stop.name)
+            }
+            updateButtonState()
+        } else if (isTracking) {
+            // Servis takip etmiyor (ör. sistem tarafından öldürülmüş) ama UI takipte sanıyor
+            isTracking = false
+            updateButtonState()
         }
     }
 
@@ -180,6 +227,26 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             override fun onStartTrackingTouch(slider: Slider) {}
             override fun onStopTrackingTouch(slider: Slider) { settingsStore.setVoiceLevel(slider.value.toInt()) }
         })
+        binding.sliderSpeechRate.value = settingsStore.getSpeechRate().toFloat().coerceIn(50f, 150f)
+        binding.sliderSpeechRate.addOnSliderTouchListener(object : Slider.OnSliderTouchListener {
+            override fun onStartTrackingTouch(slider: Slider) {}
+            override fun onStopTrackingTouch(slider: Slider) {
+                settingsStore.setSpeechRate(slider.value.toInt())
+                try { tts?.setSpeechRate(slider.value / 100f) } catch (e: Exception) {}
+                trackingService?.applyTtsSettings()
+                speakMessage("Konuşma hızı böyle duyulacak.") // anında örnek ver
+            }
+        })
+        binding.btnExportCsv.setOnClickListener {
+            try { csvExportLauncher.launch("yol_arkadasim_metrikler.csv") }
+            catch (e: Exception) { Log.e("MainActivity", "CSV launcher fail", e) }
+        }
+        binding.editEmergencyContact.setText(settingsStore.getEmergencyContact())
+        binding.btnSaveEmergencyContact.setOnClickListener {
+            val phone = binding.editEmergencyContact.text?.toString()?.trim().orEmpty()
+            settingsStore.setEmergencyContact(phone)
+            Toast.makeText(this, getString(R.string.settings_emergency_saved), Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun refreshStatsUi() {
@@ -188,6 +255,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.valTotalDist.text = String.format(Locale.US, "%.1f km", statsStore.getTotalDistanceKm())
             binding.valTotalStops.text = statsStore.getTotalStops().toString()
             binding.valFavRoute.text = statsStore.getMostUsedRoute()
+            binding.valWrongDirection.text = statsStore.getWrongDirectionCount().toString()
+            binding.valGpsDev.text = String.format(Locale.US, "%.1fm", statsStore.getAverageGpsDeviation())
+            binding.valBatteryDrop.text = String.format(Locale.US, "%.0f%%", statsStore.getTotalBatteryConsumedPct())
         } catch (e: Exception) { Log.e("MainActivity", "Stats refresh error", e) }
     }
 
@@ -234,6 +304,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.setLanguage(Locale("tr", "TR"))
+            try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) { Log.e("MainActivity", "TTS rate fail", e) }
             isTtsReady = true
             if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
                 binding.root.postDelayed({
@@ -247,7 +318,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         val msg = "Yol Arkadaşım uygulamasına hoş geldiniz. Kolay mod aktif. " +
                   "Şu an ana ekrandasınız. Ekranın en üstünde yer alan dev butona basarak hangi durağa gitmek istediğinizi seçebilirsiniz. " +
                   "Seçim yaptıktan sonra ekranın ortasında kocaman bir yeşil buton belirecek, ona basarak takibi başlatabilirsiniz. " +
-                  "Ayrıca telefonu sallayarak veya sağ üstteki mikrofon butonuna basarak hedefinizi sesle söyleyebilirsiniz."
+                  "Ayrıca telefonu sallayarak veya sağ üstteki mikrofon butonuna basarak hedefinizi sesle söyleyebilirsiniz. " +
+                  "Zor durumda kalırsanız ekranın en altındaki turuncu yardım butonu kayıtlı yakınınızı arar."
         speakMessage(msg)
     }
 
@@ -282,6 +354,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         binding.btnToggleTracking.setOnClickListener { toggleTracking() }
         binding.btnModernToggle.setOnClickListener { toggleTracking() }
         binding.btnMapStartTracking.setOnClickListener { toggleTracking() }
+        binding.btnHelp.setOnClickListener { requestHelp() }
     }
 
     private fun setupVoiceCommands() {
@@ -303,7 +376,17 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                     override fun onRmsChanged(rmsdB: Float) {}
                     override fun onBufferReceived(buffer: ByteArray?) {}
                     override fun onEndOfSpeech() {}
-                    override fun onError(error: Int) {}
+                    override fun onError(error: Int) {
+                        // Görme engelli/yaşlı kullanıcı mikrofonun dinlemediğini göremez;
+                        // sessiz kalmak yerine sesli geri bildirim ver.
+                        when (error) {
+                            SpeechRecognizer.ERROR_NO_MATCH,
+                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> speakMessage(getString(R.string.tts_not_heard))
+                            SpeechRecognizer.ERROR_RECOGNIZER_BUSY,
+                            SpeechRecognizer.ERROR_CLIENT -> { /* geçici durum, anons spam'lemeyelim */ }
+                            else -> speakMessage(getString(R.string.tts_mic_error))
+                        }
+                    }
                     override fun onPartialResults(partialResults: Bundle?) {}
                     override fun onEvent(eventType: Int, params: Bundle?) {}
                 })
@@ -328,35 +411,44 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     private fun processVoiceCommand(command: String) {
-        val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
         val cmd = command.lowercase(Locale("tr", "TR"))
-        if (cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("ayarla") || cmd.contains("yap")) {
-            var matchedStop: BusStop? = null
-            for (stop in route.stops) {
-                val stopNameLower = stop.name.lowercase(Locale("tr", "TR"))
-                val parts = stopNameLower.split(" ", ".", ",")
-                for (part in parts) {
-                    if (part.length > 3 && cmd.contains(part)) { matchedStop = stop; break }
-                }
-                if (matchedStop != null) break
-            }
-            if (matchedStop != null) {
-                destinationStopIndex = route.stops.indexOf(matchedStop)
+
+        // Acil yardım her durumda önceliklidir
+        if (cmd.contains("yardım") || cmd.contains("imdat")) { requestHelp(); return }
+
+        val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
+        val wantsDestination = cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("git") ||
+                cmd.contains("ayarla") || cmd.contains("yap") || cmd.contains("istiyorum")
+        if (wantsDestination) {
+            val matchedIdx = StopMatcher.findBestStopIndex(cmd, route.stops.map { it.name })
+            if (matchedIdx >= 0) {
+                val matchedStop = route.stops[matchedIdx]
+                destinationStopIndex = matchedIdx
                 selectedDestinationStop = matchedStop
                 selectedRoute = route
                 binding.layoutRouteInfo.visibility = View.VISIBLE
-                binding.textDestinationInfo.text = "Hedef: ${matchedStop.name}"
-                binding.textModernRouteName.text = "Hat ${route.routeId} → ${matchedStop.name}"
-                binding.textMapRouteName.text = "Hat ${route.routeId} → ${matchedStop.name}"
+                binding.textDestinationInfo.text = getString(R.string.destination_format, matchedStop.name)
+                binding.textModernRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
+                binding.textMapRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
                 recentDestStore.save(route, matchedStop, destinationStopIndex)
-                if (isTracking) speakMessage("${matchedStop.name} durağı yeni hedef olarak ayarlandı.")
-                else { speakMessage("${matchedStop.name} durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz."); updateButtonState() }
+                if (isTracking) {
+                    trackingService?.updateDestination(destinationStopIndex)
+                    speakMessage(getString(R.string.tts_new_destination_set, matchedStop.name))
+                } else {
+                    speakMessage(getString(R.string.tts_destination_selected, matchedStop.name))
+                    updateButtonState()
+                }
                 return
             }
+            // Eşleşme yoksa hemen pes etme: komut "hedefe kaç durak kaldı" gibi bir
+            // durum sorgusu olabilir; aşağıdaki dallara devam et.
         }
-        if (!isTracking) { speakMessage(getString(R.string.tts_info_not_tracking)); return }
+        if (!isTracking) {
+            speakMessage(if (wantsDestination) getString(R.string.tts_stop_not_found) else getString(R.string.tts_info_not_tracking))
+            return
+        }
         when {
-            command.contains("nerede") || command.contains("durak") -> {
+            cmd.contains("nerede") || cmd.contains("durak") -> {
                 if (lastCurIdx in route.stops.indices) {
                     val currentStop = route.stops[lastCurIdx].name
                     val nextIdx = if (destinationStopIndex >= lastCurIdx) lastCurIdx + 1 else lastCurIdx - 1
@@ -364,39 +456,80 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                     else speakMessage("Şu an $currentStop durağındasınız.")
                 }
             }
-            command.contains("kaç") || command.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
-            command.contains("mesafe") || command.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
-            command.contains("durdur") || command.contains("bitir") -> { stopTracking(); speakMessage("Takip durduruldu.") }
-            else -> speakMessage(getString(R.string.tts_command_not_understood))
+            cmd.contains("kaç") || cmd.contains("kaldı") -> speakMessage("Hedefinize ${Math.abs(destinationStopIndex - lastCurIdx)} durak kaldı.")
+            cmd.contains("mesafe") || cmd.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
+            cmd.contains("durdur") || cmd.contains("bitir") -> { stopTracking(); speakMessage(getString(R.string.tts_tracking_stopped_voice)) }
+            else -> speakMessage(if (wantsDestination) getString(R.string.tts_stop_not_found) else getString(R.string.tts_command_not_understood))
         }
     }
 
+    /**
+     * Yardım butonu / "yardım" sesli komutu: kayıtlı yakının numarasını arama
+     * ekranında açar (ACTION_DIAL izin gerektirmez; yanlışlıkla arama da başlatmaz —
+     * kullanıcının yeşil tuşa basması yeterlidir).
+     */
+    private fun requestHelp() {
+        val phone = settingsStore.getEmergencyContact()
+        if (phone.isBlank()) {
+            speakMessage(getString(R.string.tts_no_contact))
+            return
+        }
+        speakMessage(getString(R.string.tts_calling_contact))
+        try {
+            startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")))
+        } catch (e: Exception) { Log.e("MainActivity", "Dial fail", e) }
+    }
+
     private fun speakMessage(message: String) {
+        // Takip sırasında tek konuşma otoritesi servistir; iki TTS birbirini kesmesin.
+        val svc = trackingService
+        if (isTracking && svc != null) {
+            svc.speak(message)
+            return
+        }
         if (isTtsReady) tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "voice_cmd")
     }
 
     private fun toggleTracking() { if (isTracking) stopTracking() else startTrackingIfReady() }
 
     private fun startTrackingIfReady() {
-        if (selectedRoute == null || destinationStopIndex < 0) { speakMessage("Önce durak seçiniz."); showRouteSelectionDialog(); return }
+        if (selectedRoute == null || destinationStopIndex < 0) { speakMessage(getString(R.string.tts_select_stop_first)); showRouteSelectionDialog(); return }
         startTracking()
     }
 
     private fun startTracking() {
         try {
-            isTracking = true
-            val intent = Intent(this, TrackingService::class.java)
-            ContextCompat.startForegroundService(this, intent)
-            selectedRoute?.let { 
-                trackingService?.startTracking(it, destinationStopIndex, routeRepository.getStopLatitudes(it), routeRepository.getStopLongitudes(it))
-                statsStore.incrementTrips()
-                statsStore.recordRouteUsage(it.routeId)
+            // Extras, servis sistem tarafından öldürülüp yeniden başlatılırsa (REDELIVER)
+            // yolculuğun kaldığı yerden kurulmasını sağlar.
+            val intent = Intent(this, TrackingService::class.java).apply {
+                putExtra(TrackingService.EXTRA_ROUTE_ID, selectedRoute?.routeId)
+                putExtra(TrackingService.EXTRA_DEST_IDX, destinationStopIndex)
             }
-            updateButtonState()
+            ContextCompat.startForegroundService(this, intent)
+            if (trackingService == null) {
+                // Servis henüz bağlanmadı; bağlantı kurulunca onServiceConnected başlatacak
+                pendingTrackingStart = true
+                if (!isBound) bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+                return
+            }
+            doStartTracking()
         } catch (e: Exception) { Log.e("MainActivity", "startTracking fail", e) }
     }
 
+    private fun doStartTracking() {
+        try {
+            val route = selectedRoute ?: return
+            val service = trackingService ?: return
+            service.startTracking(route, destinationStopIndex, routeRepository.getStopLatitudes(route), routeRepository.getStopLongitudes(route))
+            statsStore.incrementTrips()
+            statsStore.recordRouteUsage(route.routeId)
+            isTracking = true
+            updateButtonState()
+        } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
+    }
+
     private fun stopTracking() {
+        pendingTrackingStart = false
         isTracking = false
         trackingService?.stopTracking()
         updateButtonState()
@@ -510,9 +643,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             selectedDestinationStop = stop
             destinationStopIndex = stopIndex
             binding.layoutRouteInfo.visibility = View.VISIBLE
-            binding.textDestinationInfo.text = "Hedef: ${stop.name}"
-            binding.textModernRouteName.text = "Hat ${route.routeId} → ${stop.name}"
-            binding.textMapRouteName.text = "Hat ${route.routeId} → ${stop.name}"
+            binding.textDestinationInfo.text = getString(R.string.destination_format, stop.name)
+            binding.textModernRouteName.text = getString(R.string.route_arrow_format, route.routeId, stop.name)
+            binding.textMapRouteName.text = getString(R.string.route_arrow_format, route.routeId, stop.name)
             recentDestStore.save(route, stop, stopIndex)
             if (!isModern && settingsStore.isVoiceGuidanceEnabled()) speakMessage("Hedef seçildi: ${stop.name}. Şimdi takibi başlatabilirsiniz.")
             updateButtonState()
@@ -523,6 +656,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
 
     private fun requestPermissions() {
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.INTERNET, Manifest.permission.ACCESS_NETWORK_STATE, Manifest.permission.RECORD_AUDIO)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) perms.add(Manifest.permission.POST_NOTIFICATIONS)
         val needed = perms.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (needed.isNotEmpty()) ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
     }
