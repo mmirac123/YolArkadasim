@@ -34,15 +34,11 @@ import com.example.yolarkadasim.data.SettingsStore
 import com.example.yolarkadasim.data.StatsStore
 import com.example.yolarkadasim.databinding.ActivityMainBinding
 import com.example.yolarkadasim.service.TrackingService
+import com.example.yolarkadasim.ui.MapController
 import com.example.yolarkadasim.ui.RouteSelectionDialog
 import com.example.yolarkadasim.util.StopMatcher
 import com.google.android.material.slider.Slider
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Polyline
 import java.util.Locale
 import kotlin.math.sqrt
 
@@ -80,13 +76,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var lastDistance = 0.0
     private var lastStartIdx = -1
 
-    private var userMarker: Marker? = null
-    private var routePolyline: Polyline? = null
-    private val stopMarkers = mutableListOf<Marker>()
-
-    // "Beni izle" modu: takipte harita kullanıcıyı ortalar; elle kaydırınca
-    // kapanır ve konumuma-dön butonu belirir
-    private var followUser = true
+    private lateinit var mapController: MapController
 
     // SAF ile CSV dışa aktarma: izin gerektirmez, kullanıcı konumu kendi seçer
     private val csvExportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
@@ -184,7 +174,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             tts = TextToSpeech(this, this)
             sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
             accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
-            setupMap()
+            mapController = MapController(binding.mapView, binding.fabMapFollowMe)
+            mapController.setup()
             val startInModern = settingsStore.isModernModePreferred()
             binding.switchUiMode.isChecked = startInModern
             updateUiMode(startInModern)
@@ -198,34 +189,6 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         } catch (e: Exception) { Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e) }
     }
 
-    private fun setupMap() {
-        try {
-            binding.mapView.setTileSource(TileSourceFactory.MAPNIK)
-            binding.mapView.setMultiTouchControls(true)
-            binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.ALWAYS)
-            binding.mapView.controller.setZoom(15.0)
-            binding.mapView.controller.setCenter(GeoPoint(39.9334, 32.8597))
-
-            // Kullanıcı haritayı elle oynatınca izleme modundan çık.
-            // (MapListener programatik hareketlerde de tetiklendiği için
-            // dokunma olayı üzerinden ayırt ediyoruz.)
-            binding.mapView.setOnTouchListener { _, event ->
-                if (event.action == android.view.MotionEvent.ACTION_DOWN && followUser) {
-                    followUser = false
-                    binding.fabMapFollowMe.show()
-                }
-                false // haritanın kendi dokunma işleyişi devam etsin
-            }
-            binding.fabMapFollowMe.setOnClickListener {
-                followUser = true
-                binding.fabMapFollowMe.hide()
-                if (lastLat != 0.0) {
-                    binding.mapView.controller.animateTo(GeoPoint(lastLat, lastLon))
-                }
-            }
-        } catch (e: Exception) { Log.e("MainActivity", "Map setup fail", e) }
-    }
-
     private fun setupBottomNavigation() {
         binding.bottomNavModern.setOnItemSelectedListener { item ->
             if (isFinishing || isDestroyed) return@setOnItemSelectedListener false
@@ -235,9 +198,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.modernSettingsView.visibility = if (item.itemId == R.id.nav_settings) View.VISIBLE else View.GONE
             if (item.itemId == R.id.nav_stats) refreshStatsUi()
             if (item.itemId == R.id.nav_map) {
-                updateMapUserPosition()
+                mapController.updateUserPosition(lastLat, lastLon)
                 // Takip başlamamış olsa da seçili güzergâhı göster
-                if (selectedRoute != null) updateMapRoute()
+                selectedRoute?.let { mapController.drawRoute(it, destinationStopIndex, isTracking) }
             }
             true
         }
@@ -298,16 +261,16 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
 
     override fun onResume() {
         super.onResume()
-        try { 
-            binding.mapView.onResume()
+        try {
+            mapController.onResume()
             accelerometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
         } catch (e: Exception) {}
     }
 
     override fun onPause() {
         super.onPause()
-        try { 
-            binding.mapView.onPause()
+        try {
+            mapController.onPause()
             sensorManager.unregisterListener(this)
         } catch (e: Exception) {}
     }
@@ -327,7 +290,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         try { speechRecognizer?.destroy() } catch (e: Exception) {}
         speechRecognizer = null
         try { tts?.shutdown() } catch (e: Exception) {}
-        try { binding.mapView.onDetach() } catch (e: Exception) {} // osmdroid kaynaklarını bırak
+        mapController.onDetach() // osmdroid kaynaklarını bırak
         super.onDestroy()
     }
 
@@ -554,8 +517,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             statsStore.incrementTrips()
             statsStore.recordRouteUsage(route.routeId)
             isTracking = true
-            followUser = true
-            binding.fabMapFollowMe.hide()
+            mapController.resetFollow()
             updateButtonState()
         } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
     }
@@ -567,9 +529,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         binding.cardMapTripInfo.visibility = View.GONE
         binding.textDirectionStatus.text = ""
         updateButtonState()
-        userMarker?.let { try { binding.mapView.overlays.remove(it) } catch (e: Exception) {} }
-        userMarker = null
-        binding.mapView.invalidate()
+        mapController.clearUserMarker()
     }
 
     private fun updateButtonState() {
@@ -624,76 +584,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         }
         if (binding.modernMapView.visibility == View.VISIBLE) {
             binding.cardMapTripInfo.visibility = View.VISIBLE
-            updateMapUserPosition()
+            mapController.updateUserPosition(lastLat, lastLon)
         }
-    }
-
-    private fun updateMapUserPosition() {
-        try {
-            if (isFinishing || isDestroyed || lastLat == 0.0) return
-            val userPos = GeoPoint(lastLat, lastLon)
-            if (userMarker == null) {
-                userMarker = Marker(binding.mapView)
-                userMarker?.title = "Siz"
-                // Hedef pininden ayrışsın diye kullanıcı farklı ikonla gösterilir
-                userMarker?.icon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_mylocation)
-                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                binding.mapView.overlays.add(userMarker)
-                binding.mapView.controller.setZoom(16.0)
-                binding.mapView.controller.animateTo(userPos)
-            } else {
-                userMarker?.position = userPos
-                if (followUser) binding.mapView.controller.animateTo(userPos)
-            }
-            binding.mapView.invalidate()
-        } catch (e: Exception) { Log.e("MainActivity", "Map user fail", e) }
-    }
-
-    private fun updateMapRoute() {
-        try {
-            if (isFinishing || isDestroyed) return
-            val route = selectedRoute ?: return
-            routePolyline?.let { binding.mapView.overlays.remove(it) }
-            binding.mapView.overlays.removeAll(stopMarkers)
-            stopMarkers.clear()
-            // Gerçek yol geometrisi varsa onu çiz; yoksa durak-durak düz çizgi
-            val points = if (route.shape.isNotEmpty()) route.shape.map { GeoPoint(it.lat, it.lon) }
-                         else route.stops.map { GeoPoint(it.lat, it.lon) }
-            if (points.isEmpty()) return
-            routePolyline = Polyline()
-            routePolyline?.setPoints(points)
-            routePolyline?.outlinePaint?.color = Color.parseColor("#2196F3")
-            routePolyline?.outlinePaint?.strokeWidth = 10f
-            binding.mapView.overlays.add(routePolyline)
-            // Ara duraklar küçük nokta, hedef tek büyük pin: 90+ duraklı hatlarda
-            // pin ormanı yerine hedefin ilk bakışta seçildiği sade görünüm
-            val dotIcon = ContextCompat.getDrawable(this, R.drawable.ic_stop_dot)
-            route.stops.forEachIndexed { index, stop ->
-                val p = GeoPoint(stop.lat, stop.lon)
-                val marker = Marker(binding.mapView)
-                marker.position = p
-                marker.title = stop.name
-                if (index == destinationStopIndex) {
-                    marker.subDescription = "HEDEF"
-                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                } else {
-                    marker.icon = dotIcon
-                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                }
-                stopMarkers.add(marker)
-            }
-            binding.mapView.overlays.addAll(stopMarkers)
-            // Takipte ve izleme modundayken tüm güzergâha uzaklaşma; kamera kullanıcıda kalsın
-            if (points.size > 1 && !(isTracking && followUser)) {
-                val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
-                binding.mapView.post {
-                    try {
-                        if (!isFinishing && !isDestroyed && binding.mapView.width > 0) binding.mapView.zoomToBoundingBox(bounds, true, 100)
-                    } catch (e: Exception) {}
-                }
-            }
-            binding.mapView.invalidate()
-        } catch (e: Exception) { Log.e("MainActivity", "Map route fail", e) }
     }
 
     private fun showRouteSelectionDialog() {
@@ -712,7 +604,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             recentDestStore.save(route, stop, stopIndex)
             if (!isModern && settingsStore.isVoiceGuidanceEnabled()) speakMessage("Hedef seçildi: ${stop.name}. Şimdi takibi başlatabilirsiniz.")
             updateButtonState()
-            if (binding.modernMapView.visibility == View.VISIBLE) updateMapRoute()
+            if (binding.modernMapView.visibility == View.VISIBLE) mapController.drawRoute(route, stopIndex, isTracking)
         }
         dialog.show(supportFragmentManager, "route_selection")
     }
