@@ -1,21 +1,31 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# ProGuard/R8 kuralları — release küçültme ve gizlemesi açıkken (isMinifyEnabled=true)
+# uygulamanın kırılmaması için gereken korumalar.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# --- Native / JNI köprüsü ---
+# JNI fonksiyonları Java_<paket>_<sınıf>_<metot> adıyla çözülür. R8 sınıf ya da
+# metot adını değiştirirse native motor (Kalman + FSM) tamamen kopar.
+-keepclasseswithmembernames,includedescriptorclasses class * {
+    native <methods>;
+}
+-keep class com.example.yolarkadasim.service.TrackingService { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# --- Gson (reflection ile serialize edilen model) ---
+# FavoritesStore, FavoriteStop'u TypeToken ile serialize/deserialize eder; alan
+# adları korunmalı, aksi halde favori duraklar okunamaz.
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes InnerClasses,EnclosingMethod
+-dontwarn sun.misc.**
+-keep class com.google.gson.** { *; }
+-keep class com.example.yolarkadasim.data.FavoritesStore$FavoriteStop { <fields>; }
+-keepclassmembers,allowobfuscation class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# --- osmdroid ---
+-keep class org.osmdroid.** { *; }
+-dontwarn org.osmdroid.**
+
+# --- Çökme izlerinin okunabilir kalması ---
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release imzalama gizli bilgileri — asla commit'lenmez
+keystore.properties
+*.jks
+*.keystore
