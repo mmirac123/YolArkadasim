@@ -154,8 +154,10 @@
     <string name="route_arrow_format">Hat %1$s → %2$s</string>
     <string name="tts_select_stop_first">Önce durak seçiniz.</string>
     <string name="tts_new_destination_set">%1$s durağı yeni hedef olarak ayarlandı.</string>
-    <string name="tts_destination_selected">%1$s durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
-    <string name="tts_destination_selected_with_route">%2$s durağı, %1$s numaralı hat üzerinden hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
+    <string name="tts_destination_selected">%1$s durağı hedef olarak seçildi. Başlatmak için telefonu sallayıp başlat deyin, ya da yeşil butona basın.</string>
+    <string name="tts_destination_selected_with_route">%2$s durağı, %1$s numaralı hat üzerinden hedef olarak seçildi. Başlatmak için telefonu sallayıp başlat deyin, ya da yeşil butona basın.</string>
+    <string name="tts_say_destination_first">Önce hedef söyleyin. Telefonu sallayın ve örneğin: Kızılay\'a gitmek istiyorum, deyin.</string>
+    <string name="tts_already_tracking">Takip zaten açık.</string>
     <string name="tts_tracking_stopped_voice">Takip durduruldu.</string>
 
     <!-- Map -->

@@ -27,6 +27,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.yolarkadasim.data.BusRoute
 import com.example.yolarkadasim.data.BusStop
+import com.example.yolarkadasim.data.FavoritesStore
 import com.example.yolarkadasim.data.RecentDestinationStore
 import com.example.yolarkadasim.data.RouteRepository
 import com.example.yolarkadasim.data.SettingsStore
@@ -50,6 +51,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     private lateinit var recentDestStore: RecentDestinationStore
     private lateinit var statsStore: StatsStore
     private lateinit var settingsStore: SettingsStore
+    private lateinit var favoritesStore: FavoritesStore
+
+    // "Tekrar" sesli komutu için Activity tarafında söylenen son anlamlı mesaj
+    private var lastLocalAnnouncement: String? = null
     
     private var trackingService: TrackingService? = null
     private var isBound = false
@@ -168,6 +173,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             recentDestStore = RecentDestinationStore(this)
             statsStore = StatsStore(this)
             settingsStore = SettingsStore(this)
+            favoritesStore = FavoritesStore(this)
             speechManager = SpeechManager(this, settingsStore, ::processVoiceCommand, ::speakMessage)
             speechManager.onTtsReady = {
                 // Kolay modda ve rehber açıksa açılışta yönergeyi seslendir.
@@ -330,11 +336,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun speakGuidedWalkthrough() {
+        // Sesli-öncelikli anlatım: önce tam sesli akış, butonlar ikinci seçenek
         val msg = "Yol Arkadaşım uygulamasına hoş geldiniz. Kolay mod aktif. " +
-                  "Şu an ana ekrandasınız. Ekranın en üstünde yer alan dev butona basarak hangi durağa gitmek istediğinizi seçebilirsiniz. " +
-                  "Seçim yaptıktan sonra ekranın ortasında kocaman bir yeşil buton belirecek, ona basarak takibi başlatabilirsiniz. " +
-                  "Ayrıca telefonu sallayarak veya sağ üstteki mikrofon butonuna basarak hedefinizi sesle söyleyebilirsiniz. " +
-                  "Zor durumda kalırsanız ekranın en altındaki turuncu yardım butonu kayıtlı yakınınızı arar."
+                  "Bu uygulamayı tamamen sesle kullanabilirsiniz. Telefonu hafifçe sallayın ve gitmek istediğiniz yeri söyleyin. " +
+                  "Örneğin: Kızılay'a gitmek istiyorum. Hedef seçilince tekrar sallayıp başlat deyin; yolculuğunuz sesli olarak yönlendirilir. " +
+                  "Yolculuk sırasında sallayıp neredeyim, kaç durak kaldı, ya da son anonsu duymak için tekrar diyebilirsiniz. " +
+                  "Dilerseniz ekranın üstündeki dev butonla durak seçip ortadaki yeşil butonla da başlatabilirsiniz. " +
+                  "Zor durumda kalırsanız yardım demeniz yeterli; en alttaki turuncu buton da kayıtlı yakınınızı arar."
         speakMessage(msg)
     }
 
@@ -389,8 +397,24 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Acil yardım her durumda önceliklidir
         if (cmd.contains("yardım") || cmd.contains("imdat")) { requestHelp(); return }
 
+        // Son anonsu tekrar et — kör kullanıcı bir anonsu kaçırdığında
+        if (cmd.contains("tekrar")) {
+            val last = if (isTracking) trackingService?.lastAnnouncement ?: lastLocalAnnouncement
+                       else lastLocalAnnouncement
+            if (last != null) speakMessage(last)
+            else speakMessage(getString(R.string.tts_command_not_understood))
+            return
+        }
+
+        // Sesle takip başlatma — kör kullanıcının butona ihtiyacı kalmasın
+        if (cmd.contains("başlat") || cmd.contains("gidelim")) {
+            if (isTracking) speakMessage(getString(R.string.tts_already_tracking))
+            else startTrackingByVoice()
+            return
+        }
+
         val wantsDestination = cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("git") ||
-                cmd.contains("ayarla") || cmd.contains("yap") || cmd.contains("istiyorum")
+                cmd.contains("ayarla") || cmd.contains("yap") || cmd.contains("istiyorum") || cmd.contains("götür")
         if (wantsDestination && tryVoiceDestination(cmd)) return
         // Eşleşme yoksa hemen pes etme: komut "hedefe kaç durak kaldı" gibi bir
         // durum sorgusu olabilir; aşağıdaki dallara devam et.
@@ -425,6 +449,23 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
      */
     private fun tryVoiceDestination(cmd: String): Boolean {
         val current = selectedRoute
+
+        // Önce favori takma adları: "evime git" → "Evim" diye kaydedilen durak.
+        // Kör kullanıcı için en kısa yol: salla + iki kelime.
+        val normalizedCmd = StopMatcher.normalize(cmd)
+        for (fav in favoritesStore.getFavoriteStops()) {
+            val nick = StopMatcher.normalize(fav.customName ?: continue)
+            if (nick.length < 3 || !normalizedCmd.contains(nick)) continue
+            val route = routeRepository.getRouteById(fav.routeId) ?: continue
+            // Takipteyken hat değiştirilemez; favori ancak mevcut hattaysa geçerli
+            if (isTracking && route.routeId != current?.routeId) continue
+            val idx = route.stops.indexOfFirst { it.id == fav.stopId }
+            if (idx >= 0) {
+                applyVoiceDestination(route, idx, announceRoute = !isTracking)
+                return true
+            }
+        }
+
         if (isTracking) {
             val r = current ?: return false
             val idx = StopMatcher.findBestStopIndex(cmd, r.stops.map { it.name })
@@ -493,16 +534,32 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
     }
 
     private fun speakMessage(message: String) {
+        // "Dinliyorum" gibi geçici istemler "tekrar" komutunun hafızasına girmesin
+        val isListeningPrompt = message == getString(R.string.tts_listening)
+        if (!isListeningPrompt) lastLocalAnnouncement = message
         // Takip sırasında tek konuşma otoritesi servistir; iki TTS birbirini kesmesin.
         val svc = trackingService
         if (isTracking && svc != null) {
-            svc.speak(message)
+            svc.speak(message, remember = !isListeningPrompt)
             return
         }
         speechManager.speakLocal(message)
     }
 
     private fun toggleTracking() { if (isTracking) stopTracking() else startTrackingIfReady() }
+
+    /**
+     * "Başlat" sesli komutu: buton akışından farkı, hedef yoksa görsel diyalog
+     * açmak yerine sesle yönlendirmesi (kör kullanıcı diyalogla iş yapamaz).
+     */
+    private fun startTrackingByVoice() {
+        if (selectedRoute == null || destinationStopIndex < 0) {
+            speakMessage(getString(R.string.tts_say_destination_first))
+            return
+        }
+        if (!locationReadyOrGuide()) return
+        startTracking()
+    }
 
     private fun startTrackingIfReady() {
         if (selectedRoute == null || destinationStopIndex < 0) { speakMessage(getString(R.string.tts_select_stop_first)); showRouteSelectionDialog(); return }
@@ -567,6 +624,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             isTracking = true
             mapController.resetFollow()
             updateButtonState()
+            // Anında sesli onay: kör kullanıcı butona/komuta bastığının karşılığını
+            // GPS gelene kadar sessizlikte beklemesin (biniş anonsu ayrıca gelecek)
+            speakMessage(getString(R.string.tts_tracking_started))
         } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
     }
 

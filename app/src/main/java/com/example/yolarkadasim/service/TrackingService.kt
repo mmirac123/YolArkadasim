@@ -245,6 +245,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         // Servis instance'ı bağlı Activity yüzünden yolculuklar arası hayatta
         // kalabilir: önceki yolculuğun bildirim/anons kalıntıları taşınmasın
         lastNotificationText = null
+        lastAnnouncement = null
         synchronized(pendingSpeech) { pendingSpeech.clear() }
 
         try {
@@ -453,7 +454,13 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
      * @param urgent true: mevcut anonsu keser (varış, yanlış yön gibi kritik uyarılar);
      *               false: kuyruğa eklenir, süren anons yarıda kalmaz.
      */
-    fun speak(text: String, urgent: Boolean = true) {
+    /** "Tekrar" sesli komutu için son anlamlı anons ("Dinliyorum" gibi geçici
+     *  istemler hariç — remember=false ile çağrılırlar). */
+    var lastAnnouncement: String? = null
+        private set
+
+    fun speak(text: String, urgent: Boolean = true, remember: Boolean = true) {
+        if (remember) lastAnnouncement = text
         if (!isTtsReady) {
             // Sessizce düşürme: TTS hazır olunca onInit sırayla oynatır
             synchronized(pendingSpeech) {
