@@ -16,6 +16,15 @@ data class BusStop(
 )
 
 /**
+ * Basit koordinat çifti — güzergâhın yol geometrisi için (osmdroid bağımlılığı
+ * veri katmanına sızmasın diye ayrı tip).
+ */
+data class LatLon(
+    val lat: Double,
+    val lon: Double
+)
+
+/**
  * Represents a bus route with an ordered list of stops.
  *
  * The stop order defines the route direction:
@@ -29,11 +38,14 @@ data class BusStop(
  * @property routeId    Route number/code (e.g., "521")
  * @property routeName  Human-readable route name (e.g., "Fatih – Ümitköy")
  * @property stops      Ordered list of stops from origin to terminus
+ * @property shape      Gerçek yol geometrisi (OSM'den); boşsa harita durak-durak
+ *                      düz çizgiye düşer
  */
 data class BusRoute(
     val routeId: String,
     val routeName: String,
-    val stops: List<BusStop>
+    val stops: List<BusStop>,
+    val shape: List<LatLon> = emptyList()
 ) {
     /** First stop name (origin) */
     val originName: String get() = stops.firstOrNull()?.name ?: ""

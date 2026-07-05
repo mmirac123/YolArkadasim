@@ -653,9 +653,11 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             routePolyline?.let { binding.mapView.overlays.remove(it) }
             binding.mapView.overlays.removeAll(stopMarkers)
             stopMarkers.clear()
-            val points = route.stops.map { GeoPoint(it.lat, it.lon) }
+            // Gerçek yol geometrisi varsa onu çiz; yoksa durak-durak düz çizgi
+            val points = if (route.shape.isNotEmpty()) route.shape.map { GeoPoint(it.lat, it.lon) }
+                         else route.stops.map { GeoPoint(it.lat, it.lon) }
             if (points.isEmpty()) return
-            routePolyline = Polyline() 
+            routePolyline = Polyline()
             routePolyline?.setPoints(points)
             routePolyline?.outlinePaint?.color = Color.parseColor("#2196F3")
             routePolyline?.outlinePaint?.strokeWidth = 10f

@@ -55,11 +55,22 @@ class RouteRepository(private val context: Context) {
                     )
                 }
 
+                // Opsiyonel yol geometrisi: [[lat, lon], ...]
+                val shape = mutableListOf<LatLon>()
+                val shapeArray = routeObj.optJSONArray("shape")
+                if (shapeArray != null) {
+                    for (k in 0 until shapeArray.length()) {
+                        val pt = shapeArray.getJSONArray(k)
+                        shape.add(LatLon(pt.getDouble(0), pt.getDouble(1)))
+                    }
+                }
+
                 routes.add(
                     BusRoute(
                         routeId = routeObj.getString("routeId"),
                         routeName = routeObj.getString("routeName"),
-                        stops = stops
+                        stops = stops,
+                        shape = shape
                     )
                 )
             }
