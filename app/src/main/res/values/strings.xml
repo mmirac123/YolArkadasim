@@ -45,6 +45,12 @@
     <string name="cd_recent_dest">Son hedefiniz: %1$s, hat %2$s. Seçmek için dokunun.</string>
     <string name="tts_recent_dest_selected">Son hedefiniz seçildi: %1$s.</string>
 
+    <!-- Battery Optimization -->
+    <string name="battery_opt_title">Kesintisiz Takip</string>
+    <string name="battery_opt_message">Bazı telefonlar pil tasarrufu için uygulamayı arka planda durdurabilir; bu durumda otobüsteyken sesli uyarılar kesilir. Kesintisiz çalışması için pil optimizasyonunu kapatmanız önerilir.</string>
+    <string name="battery_opt_allow">İzin Ver</string>
+    <string name="battery_opt_later">Daha Sonra</string>
+
     <!-- Location Preflight (silent-failure shield) -->
     <string name="tts_location_permission_needed">Takip için konum izni gerekli. Lütfen çıkan ekranda izin verin.</string>
     <string name="tts_permission_granted_can_start">Konum izni verildi. Şimdi takibi başlatabilirsiniz.</string>

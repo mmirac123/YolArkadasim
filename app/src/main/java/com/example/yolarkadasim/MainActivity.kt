@@ -17,6 +17,7 @@ import android.os.Build
 import android.provider.Settings
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import android.view.View
 import android.widget.Toast
@@ -494,7 +495,38 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             isTracking = true
             mapController.resetFollow()
             updateButtonState()
+            maybeAskBatteryOptimization()
         } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
+    }
+
+    /**
+     * İlk takipte bir kez: agresif OEM'ler (Xiaomi, Samsung, Oppo…) arka plan
+     * servisini öldürüp sesli uyarıları kesebilir. Kullanıcıya pil optimizasyonunu
+     * kapatmasını önerir. Rahatsız etmemek için yalnızca bir defa sorulur.
+     */
+    private fun maybeAskBatteryOptimization() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+        if (settingsStore.hasBatteryPromptShown()) return
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager
+        if (pm != null && pm.isIgnoringBatteryOptimizations(packageName)) {
+            settingsStore.markBatteryPromptShown()
+            return
+        }
+        settingsStore.markBatteryPromptShown()
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle(R.string.battery_opt_title)
+            .setMessage(R.string.battery_opt_message)
+            .setPositiveButton(R.string.battery_opt_allow) { _, _ ->
+                try {
+                    startActivity(Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName")))
+                } catch (e: Exception) {
+                    // Bazı cihazlar doğrudan isteği desteklemez; genel listeyi aç
+                    try { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                    catch (e2: Exception) { Log.e("MainActivity", "Battery opt intent fail", e2) }
+                }
+            }
+            .setNegativeButton(R.string.battery_opt_later, null)
+            .show()
     }
 
     private fun stopTracking() {

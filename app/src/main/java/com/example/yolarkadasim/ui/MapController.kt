@@ -12,6 +12,7 @@ import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.CopyrightOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 
@@ -48,6 +49,10 @@ class MapController(
             mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.ALWAYS)
             mapView.controller.setZoom(15.0)
             mapView.controller.setCenter(GeoPoint(39.9334, 32.8597))
+
+            // ODbL zorunluluğu: "© OpenStreetMap katkıcıları" atıfı harita üzerinde
+            // görünür olmalı. CopyrightOverlay bunu köşede gösterir.
+            mapView.overlays.add(CopyrightOverlay(context))
 
             // Kullanıcı haritayı elle oynatınca izleme modundan çık.
             // (MapListener programatik hareketlerde de tetiklendiği için

@@ -15,6 +15,7 @@ class SettingsStore(context: Context) {
         const val KEY_VOICE_LEVEL = "voice_level"
         const val KEY_SPEECH_RATE = "speech_rate"
         const val KEY_EMERGENCY_CONTACT = "emergency_contact"
+        const val KEY_BATTERY_PROMPTED = "battery_opt_prompted"
     }
 
     fun isModernModePreferred(): Boolean = prefs.getBoolean(KEY_STARTUP_MODE, false) // Default to Kolay Mod (false)
@@ -33,4 +34,8 @@ class SettingsStore(context: Context) {
     /** Yardım butonunun arayacağı yakın telefonu (boş = ayarlanmamış). */
     fun getEmergencyContact(): String = prefs.getString(KEY_EMERGENCY_CONTACT, "") ?: ""
     fun setEmergencyContact(phone: String) = prefs.edit().putString(KEY_EMERGENCY_CONTACT, phone.trim()).apply()
+
+    /** Pil optimizasyonu muafiyeti bir kez sorulur; kullanıcıyı rahatsız etmemek için. */
+    fun hasBatteryPromptShown(): Boolean = prefs.getBoolean(KEY_BATTERY_PROMPTED, false)
+    fun markBatteryPromptShown() = prefs.edit().putBoolean(KEY_BATTERY_PROMPTED, true).apply()
 }
