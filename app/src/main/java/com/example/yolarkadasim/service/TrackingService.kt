@@ -176,7 +176,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.setLanguage(Locale("tr", "TR"))
+            tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
             applyTtsSettings()
             isTtsReady = true
         }
@@ -486,6 +486,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     override fun onDestroy() {
+        // Sistem servisi stopTracking çağrılmadan öldürürse GPS ve sensör
+        // dinleyicileri açık kalmasın (batarya sızıntısı)
+        try { locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) } } catch (e: Exception) { Log.e(TAG, "Loc cleanup fail", e) }
+        try { sensorManager.unregisterListener(this) } catch (e: Exception) { Log.e(TAG, "Sensor cleanup fail", e) }
         tts?.shutdown()
         super.onDestroy()
     }

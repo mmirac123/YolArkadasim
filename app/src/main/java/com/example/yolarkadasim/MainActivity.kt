@@ -327,12 +327,13 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         try { speechRecognizer?.destroy() } catch (e: Exception) {}
         speechRecognizer = null
         try { tts?.shutdown() } catch (e: Exception) {}
+        try { binding.mapView.onDetach() } catch (e: Exception) {} // osmdroid kaynaklarını bırak
         super.onDestroy()
     }
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.setLanguage(Locale("tr", "TR"))
+            tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
             try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) { Log.e("MainActivity", "TTS rate fail", e) }
             isTtsReady = true
             if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
@@ -397,7 +398,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 speechRecognizer?.setRecognitionListener(object : RecognitionListener {
                     override fun onResults(results: Bundle?) {
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                        if (!matches.isNullOrEmpty()) processVoiceCommand(matches[0].lowercase(Locale("tr", "TR")))
+                        if (!matches.isNullOrEmpty()) processVoiceCommand(matches[0].lowercase(Locale.forLanguageTag("tr-TR")))
                         else speakMessage(getString(R.string.tts_command_not_understood))
                     }
                     override fun onReadyForSpeech(params: Bundle?) {}
@@ -440,7 +441,7 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     private fun processVoiceCommand(command: String) {
-        val cmd = command.lowercase(Locale("tr", "TR"))
+        val cmd = command.lowercase(Locale.forLanguageTag("tr-TR"))
 
         // Acil yardım her durumda önceliklidir
         if (cmd.contains("yardım") || cmd.contains("imdat")) { requestHelp(); return }
@@ -634,7 +635,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             if (userMarker == null) {
                 userMarker = Marker(binding.mapView)
                 userMarker?.title = "Siz"
-                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                // Hedef pininden ayrışsın diye kullanıcı farklı ikonla gösterilir
+                userMarker?.icon = ContextCompat.getDrawable(this, android.R.drawable.ic_menu_mylocation)
+                userMarker?.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                 binding.mapView.overlays.add(userMarker)
                 binding.mapView.controller.setZoom(16.0)
                 binding.mapView.controller.animateTo(userPos)
@@ -662,13 +665,21 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             routePolyline?.outlinePaint?.color = Color.parseColor("#2196F3")
             routePolyline?.outlinePaint?.strokeWidth = 10f
             binding.mapView.overlays.add(routePolyline)
+            // Ara duraklar küçük nokta, hedef tek büyük pin: 90+ duraklı hatlarda
+            // pin ormanı yerine hedefin ilk bakışta seçildiği sade görünüm
+            val dotIcon = ContextCompat.getDrawable(this, R.drawable.ic_stop_dot)
             route.stops.forEachIndexed { index, stop ->
                 val p = GeoPoint(stop.lat, stop.lon)
                 val marker = Marker(binding.mapView)
                 marker.position = p
                 marker.title = stop.name
-                marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                if (index == destinationStopIndex) marker.subDescription = "HEDEF"
+                if (index == destinationStopIndex) {
+                    marker.subDescription = "HEDEF"
+                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                } else {
+                    marker.icon = dotIcon
+                    marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                }
                 stopMarkers.add(marker)
             }
             binding.mapView.overlays.addAll(stopMarkers)

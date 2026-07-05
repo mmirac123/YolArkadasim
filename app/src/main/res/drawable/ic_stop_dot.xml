@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Harita üzerinde ara duraklar için küçük nokta: 93 duraklı hatta 93 pin
+     yerine sade görünüm; hedef durak tek pin olarak ayrışır -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/accent_blue" />
+    <stroke
+        android:width="2dp"
+        android:color="@color/white" />
+    <size
+        android:width="14dp"
+        android:height="14dp" />
+</shape>

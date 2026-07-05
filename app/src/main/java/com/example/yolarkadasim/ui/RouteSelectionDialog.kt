@@ -39,6 +39,12 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
     private var allStopOptions: List<SelectionOption> = emptyList()
     private var allRouteOptions: List<SelectionOption> = emptyList()
 
+    // Arama dizinleri: normalize() her tuş vuruşunda binlerce kez çağrılmasın
+    // diye seçenek metinleri bir kez normalize edilip saklanır
+    private var routeSearchIndex: List<Pair<SelectionOption, String>> = emptyList()
+    private var stopSearchIndex: List<Pair<SelectionOption, String>> = emptyList()
+    private var stopNamesByRoute: Map<String, String> = emptyMap()
+
     // Recent Destination UI
     private lateinit var layoutRecentDest: LinearLayout
     private lateinit var cardRecentDest: LinearLayout
@@ -73,7 +79,11 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
 
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
-            tts?.setLanguage(Locale("tr", "TR"))
+            tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
+            // Ana ekranla aynı konuşma hızı ayarına uy
+            try {
+                context?.let { tts?.setSpeechRate(com.example.yolarkadasim.data.SettingsStore(it).getSpeechRate() / 100f) }
+            } catch (e: Exception) { /* ayar okunamazsa varsayılan hız */ }
             isTtsReady = true
             
             // Auto guidance on open
@@ -116,11 +126,8 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
                 // "umitkoy" yazan da "Ümitköy"ü bulur
                 val query = StopMatcher.normalize(s?.toString() ?: "")
                 if (selectedRoute != null) {
-                    val filtered = if (query.isEmpty()) allStopOptions else allStopOptions.filter {
-                        StopMatcher.normalize(it.title).contains(query) ||
-                        StopMatcher.normalize(it.subtitle).contains(query) ||
-                        it.id.startsWith(query) // EGO durak numarasıyla arama
-                    }
+                    val filtered = if (query.isEmpty()) allStopOptions
+                    else stopSearchIndex.filter { it.second.contains(query) }.map { it.first }
                     adapter.updateItems(filtered)
                 } else {
                     adapter.updateItems(filterRoutes(query))
@@ -181,18 +188,19 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
      */
     private fun filterRoutes(query: String): List<SelectionOption> {
         if (query.isEmpty()) return allRouteOptions
-        val direct = allRouteOptions.filter {
-            StopMatcher.normalize(it.badge).contains(query) ||
-            StopMatcher.normalize(it.title).contains(query) ||
-            StopMatcher.normalize(it.subtitle).contains(query)
-        }
+        val direct = routeSearchIndex.filter { it.second.contains(query) }.map { it.first }
         // Durak adından hat bulma (kısa sorgularda gürültü olmasın diye >= 3 harf)
         val viaStopIds = if (query.length >= 3) {
+            if (stopNamesByRoute.isEmpty()) {
+                // İlk uzun sorguda bir kez kurulur (119 hat × ~50 durak)
+                stopNamesByRoute = routes.associate { r ->
+                    r.routeId to r.stops.joinToString(" ") { StopMatcher.normalize(it.name) }
+                }
+            }
             val directIds = direct.map { it.id }.toSet()
-            routes.asSequence()
-                .filter { r -> r.routeId !in directIds }
-                .filter { r -> r.stops.any { StopMatcher.normalize(it.name).contains(query) } }
-                .map { it.routeId }
+            stopNamesByRoute.asSequence()
+                .filter { (id, names) -> id !in directIds && names.contains(query) }
+                .map { it.key }
                 .toSet()
         } else emptySet()
         return direct + allRouteOptions.filter { it.id in viaStopIds }
@@ -221,6 +229,9 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         }.sortedByDescending { it.isFavorite }
 
         allRouteOptions = options
+        routeSearchIndex = options.map {
+            it to StopMatcher.normalize("${it.badge} ${it.title} ${it.subtitle}")
+        }
         adapter.updateItems(options)
         recyclerView.scrollToPosition(0)
     }
@@ -254,6 +265,10 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         }.sortedByDescending { it.isFavorite }
 
         allStopOptions = options
+        stopSearchIndex = options.map {
+            // EGO durak numarası (id) da aranabilir
+            it to StopMatcher.normalize("${it.id} ${it.title} ${it.subtitle}")
+        }
         adapter.updateItems(options)
         recyclerView.scrollToPosition(0)
     }
