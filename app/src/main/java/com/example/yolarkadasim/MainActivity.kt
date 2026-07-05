@@ -36,6 +36,7 @@ import com.example.yolarkadasim.service.TrackingService
 import com.example.yolarkadasim.ui.MapController
 import com.example.yolarkadasim.ui.RouteSelectionDialog
 import com.example.yolarkadasim.ui.SpeechManager
+import com.example.yolarkadasim.util.CrashReporter
 import com.example.yolarkadasim.util.StopMatcher
 import com.google.android.material.slider.Slider
 import org.osmdroid.config.Configuration
@@ -249,6 +250,20 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         }
         binding.btnPrivacyPolicy.setOnClickListener {
             startActivity(Intent(this, PrivacyActivity::class.java))
+        }
+        binding.btnShareCrash.setOnClickListener {
+            val log = CrashReporter.lastLog(this)
+            if (log.isNullOrBlank()) {
+                Toast.makeText(this, getString(R.string.crash_none), Toast.LENGTH_SHORT).show()
+            } else {
+                val share = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_share_subject))
+                    putExtra(Intent.EXTRA_TEXT, log)
+                }
+                try { startActivity(Intent.createChooser(share, getString(R.string.settings_share_crash))) }
+                catch (e: Exception) { Log.e("MainActivity", "share crash fail", e) }
+            }
         }
     }
 

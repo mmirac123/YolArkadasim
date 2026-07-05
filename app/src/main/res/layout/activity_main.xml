@@ -712,6 +712,18 @@
                         app:icon="@android:drawable/ic_menu_info_details"
                         app:iconTint="@color/accent_blue"
                         style="@style/Widget.Material3.Button.OutlinedButton" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnShareCrash"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:minHeight="52dp"
+                        android:text="@string/settings_share_crash"
+                        android:textColor="@color/text_secondary"
+                        app:icon="@android:drawable/ic_menu_share"
+                        app:iconTint="@color/text_secondary"
+                        style="@style/Widget.Material3.Button.TextButton" />
                 </LinearLayout>
                 </ScrollView>
             </androidx.constraintlayout.widget.ConstraintLayout>

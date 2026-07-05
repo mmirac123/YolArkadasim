@@ -45,6 +45,11 @@
     <string name="cd_recent_dest">Son hedefiniz: %1$s, hat %2$s. Seçmek için dokunun.</string>
     <string name="tts_recent_dest_selected">Son hedefiniz seçildi: %1$s.</string>
 
+    <!-- Crash log (local, user-shared) -->
+    <string name="settings_share_crash">Hata Kaydını Paylaş</string>
+    <string name="crash_none">Kayıtlı hata bulunamadı</string>
+    <string name="crash_share_subject">Yol Arkadaşım — Hata Kaydı</string>
+
     <!-- Privacy / KVKK -->
     <string name="privacy_title">Gizlilik ve Kişisel Verilerin Korunması</string>
     <string name="privacy_link">Gizlilik Politikası</string>
