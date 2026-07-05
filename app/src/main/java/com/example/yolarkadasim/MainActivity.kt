@@ -275,7 +275,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         try {
             mapController.onResume()
             accelerometer?.let { sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI) }
-        } catch (e: Exception) {}
+        } catch (e: Exception) { Log.e("MainActivity", "onResume fail", e) }
     }
 
     override fun onPause() {
@@ -283,7 +283,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         try {
             mapController.onPause()
             sensorManager.unregisterListener(this)
-        } catch (e: Exception) {}
+        } catch (e: Exception) { Log.e("MainActivity", "onPause fail", e) }
     }
 
     override fun onStop() {
@@ -291,7 +291,7 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // yeniden bağlanınca onServiceConnected callback'i tekrar kurar.
         trackingService?.onUpdate = null
         if (isBound) {
-            try { unbindService(serviceConnection) } catch (e: Exception) {}
+            try { unbindService(serviceConnection) } catch (e: Exception) { Log.e("MainActivity", "unbind fail", e) }
             isBound = false
         }
         super.onStop()

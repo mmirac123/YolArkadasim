@@ -68,7 +68,7 @@ class SpeechManager(
     }
 
     fun stopSpeaking() {
-        try { tts?.stop() } catch (e: Exception) {}
+        try { tts?.stop() } catch (e: Exception) { Log.e(TAG, "tts stop fail", e) }
     }
 
     fun setupRecognizer() {
@@ -111,15 +111,15 @@ class SpeechManager(
     fun startListening() {
         announce(context.getString(R.string.tts_listening))
         handler.postDelayed({
-            try { speechRecognizer?.startListening(speechIntent) } catch (e: Exception) {}
+            try { speechRecognizer?.startListening(speechIntent) } catch (e: Exception) { Log.e(TAG, "startListening fail", e) }
         }, 500)
     }
 
     fun shutdown() {
         handler.removeCallbacksAndMessages(null)
-        try { speechRecognizer?.destroy() } catch (e: Exception) {}
+        try { speechRecognizer?.destroy() } catch (e: Exception) { Log.e(TAG, "recognizer destroy fail", e) }
         speechRecognizer = null
-        try { tts?.shutdown() } catch (e: Exception) {}
+        try { tts?.shutdown() } catch (e: Exception) { Log.e(TAG, "tts shutdown fail", e) }
         tts = null
     }
 

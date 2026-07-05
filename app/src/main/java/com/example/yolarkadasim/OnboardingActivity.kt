@@ -4,6 +4,7 @@ import android.Manifest
 import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import com.example.yolarkadasim.data.SettingsStore
@@ -32,7 +33,7 @@ class OnboardingActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         binding.btnOnboardingContinue.setOnClickListener {
             settingsStore.markOnboarded() // reddetse bile bir daha gösterme
-            try { tts?.stop() } catch (e: Exception) {}
+            try { tts?.stop() } catch (e: Exception) { Log.e(TAG, "tts stop fail", e) }
             requestAllPermissions()
         }
     }
@@ -40,7 +41,7 @@ class OnboardingActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) {
             tts?.setLanguage(Locale.forLanguageTag("tr-TR"))
-            try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) {}
+            try { tts?.setSpeechRate(settingsStore.getSpeechRate() / 100f) } catch (e: Exception) { Log.e(TAG, "tts rate fail", e) }
             if (settingsStore.isVoiceGuidanceEnabled()) {
                 binding.root.postDelayed({
                     if (!isFinishing && !isDestroyed) {
@@ -69,10 +70,13 @@ class OnboardingActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
-        try { tts?.stop() } catch (e: Exception) {}
-        try { tts?.shutdown() } catch (e: Exception) {}
+        try { tts?.stop() } catch (e: Exception) { Log.e(TAG, "tts stop fail", e) }
+        try { tts?.shutdown() } catch (e: Exception) { Log.e(TAG, "tts shutdown fail", e) }
         super.onDestroy()
     }
 
-    companion object { private const val REQ_ONBOARDING_PERMS = 2001 }
+    companion object {
+        private const val REQ_ONBOARDING_PERMS = 2001
+        private const val TAG = "OnboardingActivity"
+    }
 }

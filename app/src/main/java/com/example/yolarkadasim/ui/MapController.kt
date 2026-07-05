@@ -72,9 +72,9 @@ class MapController(
         } catch (e: Exception) { Log.e(TAG, "Map setup fail", e) }
     }
 
-    fun onResume() { try { mapView.onResume() } catch (e: Exception) {} }
-    fun onPause() { try { mapView.onPause() } catch (e: Exception) {} }
-    fun onDetach() { try { mapView.onDetach() } catch (e: Exception) {} }
+    fun onResume() { try { mapView.onResume() } catch (e: Exception) { Log.e(TAG, "onResume fail", e) } }
+    fun onPause() { try { mapView.onPause() } catch (e: Exception) { Log.e(TAG, "onPause fail", e) } }
+    fun onDetach() { try { mapView.onDetach() } catch (e: Exception) { Log.e(TAG, "onDetach fail", e) } }
 
     /** Yeni yolculuk başlarken izlemeyi tekrar aç. */
     fun resetFollow() {
@@ -107,7 +107,7 @@ class MapController(
     }
 
     fun clearUserMarker() {
-        userMarker?.let { try { mapView.overlays.remove(it) } catch (e: Exception) {} }
+        userMarker?.let { try { mapView.overlays.remove(it) } catch (e: Exception) { Log.e(TAG, "clear user marker fail", e) } }
         userMarker = null
         mapView.invalidate()
     }
@@ -155,7 +155,7 @@ class MapController(
                 mapView.post {
                     try {
                         if (mapView.width > 0) mapView.zoomToBoundingBox(bounds, true, 100)
-                    } catch (e: Exception) {}
+                    } catch (e: Exception) { Log.e(TAG, "zoom to bounds fail", e) }
                 }
             }
             mapView.invalidate()
