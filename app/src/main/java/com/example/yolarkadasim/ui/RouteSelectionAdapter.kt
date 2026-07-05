@@ -68,9 +68,11 @@ class RouteSelectionAdapter(
             
         holder.btnAudio.visibility = if (item.showAudioIcon) View.VISIBLE else View.GONE
         
-        // Favorite Icon State
-        val favIcon = if (item.isFavorite) android.R.drawable.btn_star_big_on else android.R.drawable.btn_star_big_off
+        // Favori durumu ilk bakışta ayrışsın: dolu sarı yıldız / şeffaf içli gri kontur
+        val favIcon = if (item.isFavorite) R.drawable.ic_star_filled else R.drawable.ic_star_outline
         holder.btnFav.setImageResource(favIcon)
+        holder.btnFav.contentDescription =
+            if (item.isFavorite) "Favorilerden çıkar" else "Favoriye ekle"
 
         // Set combined contentDescription for TalkBack
         val description = buildString {
