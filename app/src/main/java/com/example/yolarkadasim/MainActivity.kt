@@ -214,7 +214,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             if (item.itemId == R.id.nav_stats) refreshStatsUi()
             if (item.itemId == R.id.nav_map) {
                 updateMapUserPosition()
-                if (isTracking) updateMapRoute()
+                // Takip başlamamış olsa da seçili güzergâhı göster
+                if (selectedRoute != null) updateMapRoute()
             }
             true
         }

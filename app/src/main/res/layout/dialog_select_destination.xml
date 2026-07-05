@@ -34,7 +34,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="12dp"
-        android:hint="Durak Ara..."
+        android:hint="@string/search_stop_hint"
         android:textColorHint="@color/text_secondary"
         android:textColor="@color/text_primary"
         android:padding="16dp"

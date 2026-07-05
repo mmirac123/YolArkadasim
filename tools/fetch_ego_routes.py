@@ -73,19 +73,22 @@ def fetch_overpass():
 def extract_routes(osm):
     # Duraklar OSM'de bazen nokta (highway=bus_stop), bazen way (platform alanı)
     # olarak çizilir; way'ler için Overpass'ın verdiği merkez koordinat kullanılır.
-    elements = {}  # (type, id) -> {lat, lon, name}
+    elements = {}  # (type, id) -> {lat, lon, name, ref}
     relations = []
     for el in osm.get("elements", []):
+        tags = el.get("tags", {})
+        # Ankara OSM verisinde durakların "ref" etiketi EGO'nun gerçek durak
+        # numarasıdır — uygulama ID olarak onu kullanır (OSM node id yerine).
+        info = {
+            "name": (tags.get("name") or "").strip(),
+            "ref": (tags.get("ref") or "").strip(),
+        }
         if el["type"] == "node":
-            elements[("node", el["id"])] = {
-                "lat": el["lat"], "lon": el["lon"],
-                "name": (el.get("tags", {}).get("name") or "").strip(),
-            }
+            info["lat"], info["lon"] = el["lat"], el["lon"]
+            elements[("node", el["id"])] = info
         elif el["type"] == "way" and "center" in el:
-            elements[("way", el["id"])] = {
-                "lat": el["center"]["lat"], "lon": el["center"]["lon"],
-                "name": (el.get("tags", {}).get("name") or "").strip(),
-            }
+            info["lat"], info["lon"] = el["center"]["lat"], el["center"]["lon"]
+            elements[("way", el["id"])] = info
         elif el["type"] == "relation":
             relations.append(el)
 
@@ -116,8 +119,9 @@ def extract_routes(osm):
             last_key = key
             if info["name"]:
                 named += 1
+            ego_no = info["ref"] if info["ref"].isdigit() else str(m["ref"])
             stops.append({
-                "id": str(m["ref"]),
+                "id": ego_no,
                 "name": info["name"] or "İsimsiz Durak",
                 "lat": round(info["lat"], 6),
                 "lon": round(info["lon"], 6),

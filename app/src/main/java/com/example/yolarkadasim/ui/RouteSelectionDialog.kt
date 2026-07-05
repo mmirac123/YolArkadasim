@@ -19,6 +19,7 @@ import com.example.yolarkadasim.data.BusStop
 import com.example.yolarkadasim.data.FavoritesStore
 import com.example.yolarkadasim.data.RecentDestination
 import com.example.yolarkadasim.data.RecentDestinationStore
+import com.example.yolarkadasim.util.StopMatcher
 import com.google.android.material.button.MaterialButton
 import java.util.Locale
 
@@ -36,6 +37,7 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
     private lateinit var adapter: RouteSelectionAdapter
     private lateinit var favoritesStore: FavoritesStore
     private var allStopOptions: List<SelectionOption> = emptyList()
+    private var allRouteOptions: List<SelectionOption> = emptyList()
 
     // Recent Destination UI
     private lateinit var layoutRecentDest: LinearLayout
@@ -110,13 +112,18 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         editSearchStop.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
-                val query = s?.toString()?.trim()?.lowercase(Locale("tr", "TR")) ?: ""
+                // StopMatcher.normalize: Türkçe İ/ı kuralları + aksan sadeleştirme —
+                // "umitkoy" yazan da "Ümitköy"ü bulur
+                val query = StopMatcher.normalize(s?.toString() ?: "")
                 if (selectedRoute != null) {
                     val filtered = if (query.isEmpty()) allStopOptions else allStopOptions.filter {
-                        it.title.lowercase(Locale("tr", "TR")).contains(query) ||
-                        it.subtitle.lowercase(Locale("tr", "TR")).contains(query)
+                        StopMatcher.normalize(it.title).contains(query) ||
+                        StopMatcher.normalize(it.subtitle).contains(query) ||
+                        it.id.startsWith(query) // EGO durak numarasıyla arama
                     }
                     adapter.updateItems(filtered)
+                } else {
+                    adapter.updateItems(filterRoutes(query))
                 }
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
@@ -168,16 +175,40 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         }
     }
 
+    /**
+     * Hat listesi filtresi: önce hat numarası/adı/güzergâh eşleşmeleri,
+     * ardından "bu duraktan hangi hatlar geçiyor" eşleşmeleri gelir.
+     */
+    private fun filterRoutes(query: String): List<SelectionOption> {
+        if (query.isEmpty()) return allRouteOptions
+        val direct = allRouteOptions.filter {
+            StopMatcher.normalize(it.badge).contains(query) ||
+            StopMatcher.normalize(it.title).contains(query) ||
+            StopMatcher.normalize(it.subtitle).contains(query)
+        }
+        // Durak adından hat bulma (kısa sorgularda gürültü olmasın diye >= 3 harf)
+        val viaStopIds = if (query.length >= 3) {
+            val directIds = direct.map { it.id }.toSet()
+            routes.asSequence()
+                .filter { r -> r.routeId !in directIds }
+                .filter { r -> r.stops.any { StopMatcher.normalize(it.name).contains(query) } }
+                .map { it.routeId }
+                .toSet()
+        } else emptySet()
+        return direct + allRouteOptions.filter { it.id in viaStopIds }
+    }
+
     private fun showRouteList() {
         textTitle.text = getString(R.string.select_route_title)
         btnBack.visibility = View.VISIBLE
         btnBack.text = "ANA EKRAN"
-        editSearchStop.visibility = View.GONE
+        editSearchStop.visibility = View.VISIBLE
+        editSearchStop.hint = getString(R.string.search_route_hint)
         editSearchStop.text.clear()
         layoutRecentDest.visibility = if (recentDestination != null) View.VISIBLE else View.GONE
 
         val favRoutes = favoritesStore.getFavoriteRoutes()
-        
+
         val options = routes.map { route ->
             SelectionOption(
                 id = route.routeId,
@@ -189,6 +220,7 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
             )
         }.sortedByDescending { it.isFavorite }
 
+        allRouteOptions = options
         adapter.updateItems(options)
         recyclerView.scrollToPosition(0)
     }
@@ -198,6 +230,7 @@ class RouteSelectionDialog : DialogFragment(), TextToSpeech.OnInitListener {
         btnBack.visibility = View.VISIBLE
         btnBack.text = "← GERİ"
         editSearchStop.visibility = View.VISIBLE
+        editSearchStop.hint = getString(R.string.search_stop_hint)
         editSearchStop.text.clear()
         layoutRecentDest.visibility = View.GONE
 
