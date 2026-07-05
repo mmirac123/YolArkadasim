@@ -169,10 +169,12 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
 
-        // Sistem servisi öldürüp intent'i yeniden teslim ettiyse yolculuğu kaldığı yerden kur.
-        // Normal akışta Activity binder üzerinden startTracking çağırır; extras sadece
-        // kurtarma senaryosunda kullanılır.
-        if (!isTrackingActive) {
+        // Sistem servisi öldürüp intent'i YENİDEN TESLİM ettiyse yolculuğu kaldığı
+        // yerden kur. Normal akışta Activity binder üzerinden startTracking çağırır;
+        // bayrak kontrolü şart: extras normal başlatmada da gelir, bayraksız kontrol
+        // taze başlatmayı "kurtarma" sanıp yanlış anons + çifte başlatma yapar.
+        val isRedelivery = (flags and START_FLAG_REDELIVERY) != 0
+        if (isRedelivery && !isTrackingActive) {
             val routeId = intent?.getStringExtra(EXTRA_ROUTE_ID)
             val destIdx = intent?.getIntExtra(EXTRA_DEST_IDX, -1) ?: -1
             if (routeId != null && destIdx >= 0) {
@@ -212,9 +214,9 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         destinationIndex = newDestIndex
         announcer.reset()
         selectedRoute?.stops?.getOrNull(newDestIndex)?.let {
-            val notification = createNotification("Yeni Hedef: ${it.name}")
-            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.notify(NOTIF_ID, notification)
+            // updateNotification üzerinden: dedupe durumu (lastNotificationText)
+            // tutarlı kalsın, sonraki güncelleme yanlışlıkla bastırılmasın
+            updateNotification(getString(R.string.notif_new_destination, it.name))
         }
     }
 
@@ -239,6 +241,11 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         hasReceivedFix = false
         gpsWaitHandler.removeCallbacks(gpsWaitRunnable)
         gpsWaitHandler.postDelayed(gpsWaitRunnable, GPS_WAIT_TIMEOUT_MS)
+
+        // Servis instance'ı bağlı Activity yüzünden yolculuklar arası hayatta
+        // kalabilir: önceki yolculuğun bildirim/anons kalıntıları taşınmasın
+        lastNotificationText = null
+        synchronized(pendingSpeech) { pendingSpeech.clear() }
 
         try {
             val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager

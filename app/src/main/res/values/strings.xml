@@ -129,6 +129,7 @@
     <string name="tts_next_is_destination">Bir önceki duraktan hareket edildi. Bir sonraki durakta ineceksiniz. Lütfen hazırlanın.</string>
     <string name="tts_arrived_get_off">İneceğiniz durağa geldiniz. Lütfen ininiz.</string>
     <string name="notif_wrong_direction">DİKKAT: Yanlış yöne gidiyorsunuz!</string>
+    <string name="notif_new_destination">Yeni Hedef: %1$s</string>
     <string name="notif_arrived">HEDEFE VARILDI!</string>
 
     <!-- Emergency / Help -->
