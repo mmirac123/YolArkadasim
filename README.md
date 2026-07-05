@@ -1,5 +1,7 @@
 # Yol Arkadaşım (Transit Companion) 🚌
 
+[![Android CI](https://github.com/mmirac123/YolArkadasim/actions/workflows/android.yml/badge.svg)](https://github.com/mmirac123/YolArkadasim/actions/workflows/android.yml)
+
 **Yol Arkadaşım**, özellikle yaşlı ve görme engelli bireylerin toplu taşıma kullanımını kolaylaştırmak amacıyla geliştirilmiş, yüksek hassasiyetli bir Android navigasyon asistanıdır. Uygulama, rakiplerinden (Moovit vb.) farklı olarak "Tam Erişilebilirlik" odaklı bir deneyim sunar: her kritik an hem sesle hem titreşimle bildirilir, sessizlik bir hata olarak kabul edilir.
 
 ## ✨ Öne Çıkan Özellikler
