@@ -287,6 +287,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     }
 
     override fun onStop() {
+        // Servis arkada çalışmaya devam ederken Activity'ye referans tutmasın (bellek sızıntısı);
+        // yeniden bağlanınca onServiceConnected callback'i tekrar kurar.
+        trackingService?.onUpdate = null
         if (isBound) {
             try { unbindService(serviceConnection) } catch (e: Exception) {}
             isBound = false
@@ -532,6 +535,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         pendingTrackingStart = false
         isTracking = false
         trackingService?.stopTracking()
+        binding.cardMapTripInfo.visibility = View.GONE
+        binding.textDirectionStatus.text = ""
         updateButtonState()
         userMarker?.let { try { binding.mapView.overlays.remove(it) } catch (e: Exception) {} }
         userMarker = null
@@ -556,29 +561,42 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
         if (isFinishing || isDestroyed) return
         val route = selectedRoute ?: return
         binding.textCoordinates.text = String.format(Locale.US, "%.6f, %.6f", lat, lon)
+        binding.textModernCoords.text = String.format(Locale.US, "GPS: %.5f, %.5f", lat, lon)
         binding.textDeviation.text = "Sapma: ${if (deviation.isFinite()) deviation.toInt() else 0} m"
-        binding.textDistanceToNext.text = "Mesafe: ${distance.toInt()} m"
-        if (deviation > 200.0 || direction == 1) {
-            binding.textDirectionStatus.text = "UYARI: ROTA DIŞI!"
-            binding.textDirectionStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_red))
-        } else {
-            binding.textDirectionStatus.text = "Doğru yoldasınız."
-            binding.textDirectionStatus.setTextColor(ContextCompat.getColor(this, R.color.accent_green))
-        }
+        binding.textDistanceToNext.text = getString(R.string.distance_short_format, distance.toInt())
+
+        // Rota durumu — hem kolay hem modern mod aynı gerçeği göstersin
+        val offRoute = deviation > 200.0 || direction == 1
+        val statusText = getString(if (offRoute) R.string.status_off_route else R.string.status_on_route)
+        val statusColor = ContextCompat.getColor(this, if (offRoute) R.color.accent_red else R.color.accent_green)
+        binding.textDirectionStatus.text = statusText
+        binding.textDirectionStatus.setTextColor(statusColor)
+        binding.textModernDeviationStatus.text = statusText
+        binding.textModernDeviationStatus.setTextColor(statusColor)
+
+        val remainingStops = Math.abs(destinationStopIndex - curIdx)
         val nextIdx = if (destinationStopIndex >= curIdx) curIdx + 1 else curIdx - 1
         if (nextIdx in route.stops.indices) {
             val nextStop = route.stops[nextIdx]
-            binding.textNextStop.text = "Sıradaki: ${nextStop.name}"
+            binding.textNextStop.text = getString(R.string.next_stop_short_format, nextStop.name)
             binding.textModernNextStopName.text = nextStop.name
-            binding.textRemainingStops.text = "Kalan Durak: ${Math.abs(destinationStopIndex - curIdx)}"
-            binding.textModernRemainingValue.text = "${Math.abs(destinationStopIndex - curIdx)}"
+            binding.textRemainingStops.text = getString(R.string.remaining_short_format, remainingStops)
+            binding.textModernRemainingValue.text = "$remainingStops"
             binding.textModernDistValue.text = "${distance.toInt()} m"
             val tripStops = Math.abs(destinationStopIndex - startIdx).toFloat()
             val coveredStops = Math.abs(curIdx - startIdx).toFloat()
             val progress = if (tripStops > 0) ((coveredStops / tripStops) * 100).toInt().coerceIn(0, 100) else 100
             binding.progressModernTrip.progress = progress
+
+            // Harita sekmesindeki yolculuk kartı (önceden hiç beslenmiyordu)
+            binding.textMapNextStop.text = getString(R.string.next_stop_short_format, nextStop.name)
+            binding.textMapDistance.text = getString(R.string.distance_short_format, distance.toInt())
+            binding.textMapRemainingStops.text = getString(R.string.remaining_short_format, remainingStops)
         }
-        if (binding.modernMapView.visibility == View.VISIBLE) updateMapUserPosition()
+        if (binding.modernMapView.visibility == View.VISIBLE) {
+            binding.cardMapTripInfo.visibility = View.VISIBLE
+            updateMapUserPosition()
+        }
     }
 
     private fun updateMapUserPosition() {

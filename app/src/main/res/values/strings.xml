@@ -126,6 +126,13 @@
     <string name="tts_destination_selected">%1$s durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
     <string name="tts_tracking_stopped_voice">Takip durduruldu.</string>
 
+    <!-- Direction Status -->
+    <string name="status_on_route">Doğru yoldasınız</string>
+    <string name="status_off_route">UYARI: ROTA DIŞI!</string>
+    <string name="next_stop_short_format">Sıradaki: %1$s</string>
+    <string name="remaining_short_format">Kalan Durak: %1$d</string>
+    <string name="distance_short_format">Mesafe: %1$d m</string>
+
     <!-- CSV Export -->
     <string name="btn_export_csv">Akademik Verileri CSV Olarak İndir</string>
     <string name="csv_export_done">Veriler CSV dosyasına kaydedildi</string>

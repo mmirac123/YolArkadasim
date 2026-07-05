@@ -127,7 +127,7 @@
             android:layout_marginTop="12dp"
             android:text="@string/status_idle"
             android:textColor="@color/text_secondary"
-            android:textSize="18sp"
+            android:textSize="20sp"
             android:accessibilityLiveRegion="polite"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
@@ -173,7 +173,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textColor="@color/text_primary"
-                android:textSize="22sp"
+                android:textSize="26sp"
                 android:textStyle="bold"
                 android:accessibilityLiveRegion="polite"
                 tools:text="Sıradaki: Harikalar Diyarı" />
@@ -182,20 +182,22 @@
                 android:id="@+id/textDistanceToNext"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="8dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 tools:text="Mesafe: 450 m" />
 
             <TextView
                 android:id="@+id/textRemainingStops"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="6dp"
                 android:textColor="@color/text_secondary"
-                android:textSize="18sp"
+                android:textSize="20sp"
                 tools:text="Kalan Durak: 5" />
 
+            <!-- Teknik satırlar yaşlı kullanıcı için gürültü: gizli tutulur,
+                 kod hâlâ değerleri yazar (hata ayıklamada görünür yapılabilir) -->
             <TextView
                 android:id="@+id/textDeviation"
                 android:layout_width="match_parent"
@@ -203,6 +205,8 @@
                 android:layout_marginTop="6dp"
                 android:textColor="@color/warning_amber"
                 android:textSize="14sp"
+                android:visibility="gone"
+                android:importantForAccessibility="no"
                 tools:text="Sapma: 0 m" />
 
             <TextView
@@ -213,6 +217,7 @@
                 android:textColor="@color/text_secondary"
                 android:textSize="12sp"
                 android:alpha="0.5"
+                android:visibility="gone"
                 android:importantForAccessibility="no"
                 tools:text="39.9, 32.7" />
 

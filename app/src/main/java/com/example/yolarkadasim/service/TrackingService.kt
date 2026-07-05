@@ -148,7 +148,9 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         }
 
         linearAccelSensor?.let {
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_GAME)
+            // UI frekansı (~60ms) Kalman girdisi için yeterli; GAME (~20ms) 3 kat
+            // fazla uyandırma yapıp batarya tüketiyordu — veriler zaten ortalanıyor.
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
         }
 
         // Sistem servisi öldürüp intent'i yeniden teslim ettiyse yolculuğu kaldığı yerden kur.
@@ -247,9 +249,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         try {
             val stats = StatsStore(this)
             stats.addGpsDeviationBatch(sessionGpsDeviationSum, sessionGpsDeviationCount)
-            if (sessionWrongDirectionCount > 0) {
-                for (i in 0 until sessionWrongDirectionCount) stats.incrementWrongDirection()
-            }
+            stats.addWrongDirectionBatch(sessionWrongDirectionCount)
             if (startBatteryLevel != -1) {
                 val bm = getSystemService(Context.BATTERY_SERVICE) as android.os.BatteryManager
                 val endBatteryLevel = bm.getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
@@ -265,6 +265,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     private var currentInterval = 1000L
+    private var lastIntervalSwitchMs = 0L
 
     private fun beginLocationUpdates() {
         val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, currentInterval)
@@ -287,8 +288,17 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     private fun adjustSamplingRate(speed: Float) {
-        val newInterval = if (speed < 2.0f) 2000L else 1000L
-        if (newInterval != currentInterval) {
+        // Histerezis (1.5/2.5 m/s) + 10 sn bekleme: otobüs trafikte eşik etrafında
+        // salındığında her saniye remove/request döngüsü GPS kilitlenmesini bozup
+        // batarya yakıyordu.
+        val newInterval = when {
+            speed < 1.5f -> 2000L
+            speed > 2.5f -> 1000L
+            else -> currentInterval
+        }
+        val now = System.currentTimeMillis()
+        if (newInterval != currentInterval && now - lastIntervalSwitchMs > 10_000L) {
+            lastIntervalSwitchMs = now
             currentInterval = newInterval
             locationCallback?.let {
                 fusedLocationClient.removeLocationUpdates(it)
@@ -372,7 +382,9 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         val nextIdx = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1
         if (nextIdx in route.stops.indices) {
             val nextStop = route.stops[nextIdx]
-            updateNotification(getString(R.string.notif_next_stop, nextStop.name, distToNext.toInt()))
+            // Mesafeyi 50 m'lik kovalara yuvarla: bildirim ancak anlamlı değişimde yenilensin
+            val bucketedDist = (distToNext.toInt() / 50) * 50
+            updateNotification(getString(R.string.notif_next_stop, nextStop.name, bucketedDist))
             if (distToNext <= 150.0 && lastAnnouncedNextIdx != nextIdx) {
                 if (nextIdx == destinationIndex) {
                     speak(getString(R.string.tts_arriving, nextStop.name))
@@ -462,7 +474,13 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             .build()
     }
 
+    private var lastNotificationText: String? = null
+
     private fun updateNotification(content: String) {
+        // Her GPS tikinde (1 sn) aynı bildirimi yeniden yayınlamak sistemi meşgul
+        // ediyor ve Android'in bildirim hız sınırına takılabiliyordu.
+        if (content == lastNotificationText) return
+        lastNotificationText = content
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIF_ID, createNotification(content))
     }

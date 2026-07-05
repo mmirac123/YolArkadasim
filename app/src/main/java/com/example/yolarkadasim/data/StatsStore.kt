@@ -35,19 +35,24 @@ class StatsStore(context: Context) {
         val counts = getRouteUsageCounts().toMutableMap()
         counts[routeId] = (counts[routeId] ?: 0) + 1
         
-        // Save back as a simple comma-separated string or multiple keys
-        // For simplicity, we'll just track the single top route for now
         val topRoute = counts.maxByOrNull { it.value }?.key
-        prefs.edit().putString(KEY_MOST_USED_ROUTE, topRoute).apply()
-        
-        // Save the map
         val serialized = counts.entries.joinToString(",") { "${it.key}:${it.value}" }
-        prefs.edit().putString("route_counts", serialized).apply()
+        prefs.edit()
+            .putString(KEY_MOST_USED_ROUTE, topRoute)
+            .putString("route_counts", serialized)
+            .apply()
     }
 
     fun incrementWrongDirection() {
         val current = prefs.getInt("total_wrong_direction", 0)
         prefs.edit().putInt("total_wrong_direction", current + 1).apply()
+    }
+
+    /** Seyahat sonunda tek yazmayla toplu ekleme (N ayrı prefs yazması yerine). */
+    fun addWrongDirectionBatch(count: Int) {
+        if (count <= 0) return
+        val current = prefs.getInt("total_wrong_direction", 0)
+        prefs.edit().putInt("total_wrong_direction", current + count).apply()
     }
 
     fun addGpsDeviationBatch(sum: Double, count: Int) {
