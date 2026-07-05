@@ -84,6 +84,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
     private var routePolyline: Polyline? = null
     private val stopMarkers = mutableListOf<Marker>()
 
+    // "Beni izle" modu: takipte harita kullanıcıyı ortalar; elle kaydırınca
+    // kapanır ve konumuma-dön butonu belirir
+    private var followUser = true
+
     // SAF ile CSV dışa aktarma: izin gerektirmez, kullanıcı konumu kendi seçer
     private val csvExportLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         if (uri == null) return@registerForActivityResult
@@ -201,6 +205,24 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding.mapView.zoomController.setVisibility(CustomZoomButtonsController.Visibility.ALWAYS)
             binding.mapView.controller.setZoom(15.0)
             binding.mapView.controller.setCenter(GeoPoint(39.9334, 32.8597))
+
+            // Kullanıcı haritayı elle oynatınca izleme modundan çık.
+            // (MapListener programatik hareketlerde de tetiklendiği için
+            // dokunma olayı üzerinden ayırt ediyoruz.)
+            binding.mapView.setOnTouchListener { _, event ->
+                if (event.action == android.view.MotionEvent.ACTION_DOWN && followUser) {
+                    followUser = false
+                    binding.fabMapFollowMe.show()
+                }
+                false // haritanın kendi dokunma işleyişi devam etsin
+            }
+            binding.fabMapFollowMe.setOnClickListener {
+                followUser = true
+                binding.fabMapFollowMe.hide()
+                if (lastLat != 0.0) {
+                    binding.mapView.controller.animateTo(GeoPoint(lastLat, lastLon))
+                }
+            }
         } catch (e: Exception) { Log.e("MainActivity", "Map setup fail", e) }
     }
 
@@ -531,6 +553,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             statsStore.incrementTrips()
             statsStore.recordRouteUsage(route.routeId)
             isTracking = true
+            followUser = true
+            binding.fabMapFollowMe.hide()
             updateButtonState()
         } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
     }
@@ -614,7 +638,10 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 binding.mapView.overlays.add(userMarker)
                 binding.mapView.controller.setZoom(16.0)
                 binding.mapView.controller.animateTo(userPos)
-            } else userMarker?.position = userPos
+            } else {
+                userMarker?.position = userPos
+                if (followUser) binding.mapView.controller.animateTo(userPos)
+            }
             binding.mapView.invalidate()
         } catch (e: Exception) { Log.e("MainActivity", "Map user fail", e) }
     }
@@ -643,7 +670,8 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
                 stopMarkers.add(marker)
             }
             binding.mapView.overlays.addAll(stopMarkers)
-            if (points.size > 1) {
+            // Takipte ve izleme modundayken tüm güzergâha uzaklaşma; kamera kullanıcıda kalsın
+            if (points.size > 1 && !(isTracking && followUser)) {
                 val bounds = org.osmdroid.util.BoundingBox.fromGeoPoints(points)
                 binding.mapView.post {
                     try {
