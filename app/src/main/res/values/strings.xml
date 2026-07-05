@@ -145,7 +145,8 @@
     <!-- Settings -->
     <string name="settings_speech_rate">Konuşma Hızı</string>
     <string name="settings_voice_level">Ses Seviyesi</string>
-    <string name="settings_startup_modern">Açılış Modu: Modern</string>
+    <string name="settings_startup_modern">Açılışta Modern Mod ile başla</string>
+    <string name="settings_applies_next_launch">Bu tercih bir sonraki açılışta uygulanır</string>
     <string name="settings_auto_voice_guide">Otomatik Sesli Rehber</string>
 
     <!-- Misc UI -->

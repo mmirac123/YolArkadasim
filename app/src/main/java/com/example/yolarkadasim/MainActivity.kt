@@ -223,7 +223,12 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun setupSettingsPage() {
         binding.switchStartupMode.isChecked = settingsStore.isModernModePreferred()
-        binding.switchStartupMode.setOnCheckedChangeListener { _, isChecked -> settingsStore.setModernModePreferred(isChecked) }
+        binding.switchStartupMode.setOnCheckedChangeListener { _, isChecked ->
+            settingsStore.setModernModePreferred(isChecked)
+            // Bu ayar mevcut ekranı DEĞİL, bir sonraki açılışı etkiler — kullanıcı
+            // "bastım ama bir şey olmadı" sanmasın diye anında geri bildirim ver
+            Toast.makeText(this, getString(R.string.settings_applies_next_launch), Toast.LENGTH_SHORT).show()
+        }
         binding.switchVoiceGuidance.isChecked = settingsStore.isVoiceGuidanceEnabled()
         binding.switchVoiceGuidance.setOnCheckedChangeListener { _, isChecked -> settingsStore.setVoiceGuidanceEnabled(isChecked) }
         binding.sliderVoiceLevel.value = settingsStore.getVoiceLevel().toFloat().coerceIn(0f, 100f)
