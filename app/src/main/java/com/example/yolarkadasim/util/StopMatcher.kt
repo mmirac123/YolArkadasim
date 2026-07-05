@@ -21,8 +21,9 @@ object StopMatcher {
         "olarak", "lutfen", "sonra", "simdi", "bir", "ve", "ile"
     )
 
-    /** En iyi eşleşme bu puanın altındaysa eşleşme yok sayılır. */
-    private const val MATCH_THRESHOLD = 0.75
+    /** En iyi eşleşme bu puanın altındaysa eşleşme yok sayılır.
+     *  Public: hatlar-arası arama en iyi adayı bu eşiğe göre değerlendirir. */
+    const val MATCH_THRESHOLD = 0.75
 
     /**
      * Türkçe kurallarıyla küçük harfe çevirir, aksanları sadeleştirir,
@@ -93,15 +94,25 @@ object StopMatcher {
 
     /**
      * Komuta en iyi uyan durağın indeksini döndürür; güvenilir eşleşme yoksa -1.
+     */
+    fun findBestStopIndex(command: String, stopNames: List<String>): Int {
+        val match = bestMatch(command, stopNames) ?: return -1
+        return if (match.second >= MATCH_THRESHOLD) match.first else -1
+    }
+
+    /**
+     * En iyi eşleşmeyi EŞİK UYGULAMADAN (indeks, puan) olarak döndürür; aday
+     * yoksa null. Hatlar arası karşılaştırma için: her hattın en iyi adayı
+     * puanlanır, en yüksek puanlı hat/durak çifti seçilir.
      *
      * Puanlama: en güçlü (komut kelimesi, durak kelimesi) çifti esas alınır;
      * durağın birden çok kelimesi komutla eşleşiyorsa küçük bir bonus eklenir
      * ("ümitköy metro" komutu, sadece "metro" içeren duraklardan çok
      * "Ümitköy Metro İstasyonu"nu seçer).
      */
-    fun findBestStopIndex(command: String, stopNames: List<String>): Int {
+    fun bestMatch(command: String, stopNames: List<String>): Pair<Int, Double>? {
         val cmdTokens = tokenize(command).filter { it !in COMMAND_STOPWORDS }
-        if (cmdTokens.isEmpty()) return -1
+        if (cmdTokens.isEmpty()) return null
 
         var bestIdx = -1
         var bestScore = 0.0
@@ -131,6 +142,6 @@ object StopMatcher {
                 bestIdx = idx
             }
         }
-        return if (bestScore >= MATCH_THRESHOLD) bestIdx else -1
+        return if (bestIdx >= 0) bestIdx to bestScore else null
     }
 }

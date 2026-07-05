@@ -153,6 +153,7 @@
     <string name="tts_select_stop_first">Önce durak seçiniz.</string>
     <string name="tts_new_destination_set">%1$s durağı yeni hedef olarak ayarlandı.</string>
     <string name="tts_destination_selected">%1$s durağı hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
+    <string name="tts_destination_selected_with_route">%2$s durağı, %1$s numaralı hat üzerinden hedef olarak seçildi. Şimdi takibi başlatabilirsiniz.</string>
     <string name="tts_tracking_stopped_voice">Takip durduruldu.</string>
 
     <!-- Map -->

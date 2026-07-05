@@ -2,6 +2,7 @@ package com.example.yolarkadasim
 
 import com.example.yolarkadasim.util.StopMatcher
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class StopMatcherTest {
@@ -72,6 +73,16 @@ class StopMatcherTest {
     @Test
     fun `stopwords alone do not match`() {
         assertEquals(-1, StopMatcher.findBestStopIndex("hedef ayarla lütfen", stops))
+    }
+
+    @Test
+    fun `bestMatch exposes comparable scores across routes`() {
+        // Hatlar-arası arama: doğru hattın adayı yüksek puan almalı,
+        // alakasız hattın adayı ya olmamalı ya düşük kalmalı
+        val good = StopMatcher.bestMatch("kızılaya gitmek istiyorum", listOf("Kızılay Meydanı"))
+        val bad = StopMatcher.bestMatch("kızılaya gitmek istiyorum", listOf("Batıkent Metro", "Ergazi Mahallesi"))
+        assertTrue(good != null && good.second >= StopMatcher.MATCH_THRESHOLD)
+        assertTrue(bad == null || bad.second < StopMatcher.MATCH_THRESHOLD)
     }
 
     @Test

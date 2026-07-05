@@ -196,7 +196,10 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             if (!settingsStore.hasOnboarded()) {
                 startActivity(Intent(this, OnboardingActivity::class.java))
             } else {
-                requestPermissions()
+                val requestedAny = requestPermissions()
+                // Pil muafiyeti sorusu sakin bir anda sorulur: izin diyaloğu yokken,
+                // ana ekranda — takip başlatma anında (otobüse binerken) DEĞİL.
+                if (!requestedAny) maybeAskBatteryOptimization()
             }
         } catch (e: Exception) { Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e) }
     }
@@ -381,33 +384,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         // Acil yardım her durumda önceliklidir
         if (cmd.contains("yardım") || cmd.contains("imdat")) { requestHelp(); return }
 
-        val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
         val wantsDestination = cmd.contains("hedef") || cmd.contains("gitmek") || cmd.contains("git") ||
                 cmd.contains("ayarla") || cmd.contains("yap") || cmd.contains("istiyorum")
-        if (wantsDestination) {
-            val matchedIdx = StopMatcher.findBestStopIndex(cmd, route.stops.map { it.name })
-            if (matchedIdx >= 0) {
-                val matchedStop = route.stops[matchedIdx]
-                destinationStopIndex = matchedIdx
-                selectedDestinationStop = matchedStop
-                selectedRoute = route
-                binding.layoutRouteInfo.visibility = View.VISIBLE
-                binding.textDestinationInfo.text = getString(R.string.destination_format, matchedStop.name)
-                binding.textModernRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
-                binding.textMapRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
-                recentDestStore.save(route, matchedStop, destinationStopIndex)
-                if (isTracking) {
-                    trackingService?.updateDestination(destinationStopIndex)
-                    speakMessage(getString(R.string.tts_new_destination_set, matchedStop.name))
-                } else {
-                    speakMessage(getString(R.string.tts_destination_selected, matchedStop.name))
-                    updateButtonState()
-                }
-                return
-            }
-            // Eşleşme yoksa hemen pes etme: komut "hedefe kaç durak kaldı" gibi bir
-            // durum sorgusu olabilir; aşağıdaki dallara devam et.
-        }
+        if (wantsDestination && tryVoiceDestination(cmd)) return
+        // Eşleşme yoksa hemen pes etme: komut "hedefe kaç durak kaldı" gibi bir
+        // durum sorgusu olabilir; aşağıdaki dallara devam et.
+
+        val route = selectedRoute ?: routeRepository.getAllRoutes().firstOrNull() ?: return
         if (!isTracking) {
             speakMessage(if (wantsDestination) getString(R.string.tts_stop_not_found) else getString(R.string.tts_info_not_tracking))
             return
@@ -425,6 +408,65 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             cmd.contains("mesafe") || cmd.contains("metre") -> speakMessage("Sıradaki durağa yaklaşık ${lastDistance.toInt()} metre var.")
             cmd.contains("durdur") || cmd.contains("bitir") -> { stopTracking(); speakMessage(getString(R.string.tts_tracking_stopped_voice)) }
             else -> speakMessage(if (wantsDestination) getString(R.string.tts_stop_not_found) else getString(R.string.tts_command_not_understood))
+        }
+    }
+
+    /**
+     * Sesli hedef belirleme. Takip sırasında yalnızca mevcut hatta arar
+     * (yolculuk ortasında hat değiştirilemez); takip yokken önce seçili hatta,
+     * bulunamazsa 119 hattın TAMAMINDA arar ve en yüksek puanlı hat+durak
+     * çiftini seçer. Hat otomatik seçildiyse anonsta hat numarası da söylenir.
+     * @return true: hedef ayarlandı ve anons yapıldı
+     */
+    private fun tryVoiceDestination(cmd: String): Boolean {
+        val current = selectedRoute
+        if (isTracking) {
+            val r = current ?: return false
+            val idx = StopMatcher.findBestStopIndex(cmd, r.stops.map { it.name })
+            if (idx >= 0) { applyVoiceDestination(r, idx); return true }
+            return false
+        }
+        if (current != null) {
+            val idx = StopMatcher.findBestStopIndex(cmd, current.stops.map { it.name })
+            if (idx >= 0) { applyVoiceDestination(current, idx); return true }
+        }
+        var bestRoute: BusRoute? = null
+        var bestIdx = -1
+        var bestScore = 0.0
+        for (r in routeRepository.getAllRoutes()) {
+            if (r === current) continue
+            val match = StopMatcher.bestMatch(cmd, r.stops.map { it.name }) ?: continue
+            if (match.second > bestScore) {
+                bestScore = match.second
+                bestRoute = r
+                bestIdx = match.first
+            }
+        }
+        val chosen = bestRoute
+        if (chosen != null && bestScore >= StopMatcher.MATCH_THRESHOLD) {
+            applyVoiceDestination(chosen, bestIdx, announceRoute = true)
+            return true
+        }
+        return false
+    }
+
+    private fun applyVoiceDestination(route: BusRoute, matchedIdx: Int, announceRoute: Boolean = false) {
+        val matchedStop = route.stops[matchedIdx]
+        selectedRoute = route
+        selectedDestinationStop = matchedStop
+        destinationStopIndex = matchedIdx
+        binding.layoutRouteInfo.visibility = View.VISIBLE
+        binding.textDestinationInfo.text = getString(R.string.destination_format, matchedStop.name)
+        binding.textModernRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
+        binding.textMapRouteName.text = getString(R.string.route_arrow_format, route.routeId, matchedStop.name)
+        recentDestStore.save(route, matchedStop, matchedIdx)
+        if (isTracking) {
+            trackingService?.updateDestination(matchedIdx)
+            speakMessage(getString(R.string.tts_new_destination_set, matchedStop.name))
+        } else {
+            if (announceRoute) speakMessage(getString(R.string.tts_destination_selected_with_route, route.routeId, matchedStop.name))
+            else speakMessage(getString(R.string.tts_destination_selected, matchedStop.name))
+            updateButtonState()
         }
     }
 
@@ -520,7 +562,6 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             isTracking = true
             mapController.resetFollow()
             updateButtonState()
-            maybeAskBatteryOptimization()
         } catch (e: Exception) { Log.e("MainActivity", "doStartTracking fail", e) }
     }
 
@@ -641,11 +682,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         dialog.show(supportFragmentManager, "route_selection")
     }
 
-    private fun requestPermissions() {
+    /** @return true: sistem izin diyaloğu gösterildi (eksik izin vardı) */
+    private fun requestPermissions(): Boolean {
         val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.INTERNET, Manifest.permission.ACCESS_NETWORK_STATE, Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) perms.add(Manifest.permission.POST_NOTIFICATIONS)
         val needed = perms.filter { ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED }
         if (needed.isNotEmpty()) ActivityCompat.requestPermissions(this, needed.toTypedArray(), 1001)
+        return needed.isNotEmpty()
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
