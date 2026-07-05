@@ -2,7 +2,9 @@
 
 [![Android CI](https://github.com/mmirac123/YolArkadasim/actions/workflows/android.yml/badge.svg)](https://github.com/mmirac123/YolArkadasim/actions/workflows/android.yml)
 
-**Yol Arkadaşım**, özellikle yaşlı ve görme engelli bireylerin toplu taşıma kullanımını kolaylaştırmak amacıyla geliştirilmiş, yüksek hassasiyetli bir Android navigasyon asistanıdır. Uygulama, rakiplerinden (Moovit vb.) farklı olarak "Tam Erişilebilirlik" odaklı bir deneyim sunar: her kritik an hem sesle hem titreşimle bildirilir, sessizlik bir hata olarak kabul edilir.
+**Yol Arkadaşım**, özellikle yaşlı ve görme engelli bireylerin toplu taşıma kullanımını kolaylaştırmak amacıyla geliştirilen, erişilebilirlik odaklı bir Android yolculuk asistanıdır. Tasarım ilkesi şudur: her kritik an hem sesle hem titreşimle bildirilir, sessizlik bir hata olarak kabul edilir.
+
+> **Proje durumu:** Bu, çalışan bir **prototiptir**. Durak ve güzergâh verisi açık kaynaklı OpenStreetMap'ten türetilmiştir; resmî olarak doğrulanmamıştır ve sefer saati içermez. Uygulama gerçek zamanlı sefer bilgisi kullanmaz (yalnızca GPS + statik durak konumları). Gerçek bir kamu hizmetine dönüşmesi için resmî EGO verisi ve saha testi gereklidir. Ayrıntılar için [proje durum belgesine](docs/) bakınız.
 
 ## ✨ Öne Çıkan Özellikler
 
@@ -18,8 +20,8 @@
 - "Yardım" veya "imdat" sesli komutuyla da tetiklenir — telefon cebindeyken bile.
 - Ekstra izin gerektirmez; yanlışlıkla arama başlatmaz (kullanıcı yeşil tuşa basarak onaylar).
 
-### 📍 Profesyonel Takip Sistemi
-- **C++ Navigasyon Motoru:** JNI üzerinden Kalman filtresi + durak durum makinesi (FSM) ile yüksek performanslı konum yumuşatma, mesafe ve sapma hesapları. Her seyahat öncesi motor sıfırlanır; önceki yolculuğun durumu yenisine taşınmaz.
+### 📍 Takip Sistemi
+- **C++ Navigasyon Motoru (JNI):** Konum yumuşatma için basitleştirilmiş bir Kalman filtresi, durak geçişlerini izleyen bir durum makinesi (FSM) ve mesafe/sapma hesapları native tarafta yapılır. Her seyahat öncesi motor sıfırlanır; önceki yolculuğun durumu yenisine taşınmaz. (Not: filtre üretim düzeyinde ayarlanmış değil, prototip amaçlıdır.)
 - **Dinamik GPS Örnekleme:** Hareket hızına göre (dururken 2 sn, hızlıyken 1 sn) batarya ve hassasiyet dengesi.
 - **Otomatik Biniş Algılama:** Takip başladığında en yakın durağı tespit eder; duraktan uzaksanız sizi durağa yönlendirir.
 - **Yanlış Yön Uyarısı:** Ters yöne gidiş algılanınca sesli anons + güçlü titreşim + bildirim.
@@ -49,11 +51,13 @@ Gürültülü otobüste anons duyulmayabilir; kritik anlar ayırt edilebilir tit
 - **Asgari İzin İlkesi:** Arka plan konumu veya depolama izni istenmez; yardım butonu arama iznine ihtiyaç duymaz.
 
 ## 🛠 Teknik Mimari
-- **Dil:** Kotlin (UI & Service), C++ (Native Engine: Kalman filtresi, navigasyon FSM)
+- **Dil:** Kotlin (UI & Service), C++ (native motor: basitleştirilmiş Kalman filtresi + navigasyon FSM)
+- **Mimari:** Yönetici sınıflara ayrılmış (MapController, SpeechManager) ince Activity; anons karar mantığı saf/test edilebilir bir sınıfta (NavigationAnnouncer)
 - **Konum:** Google Play Services Fused Location Provider
-- **Harita:** osmdroid (OpenStreetMap — API Key gerektirmez)
-- **Veri:** JSON tabanlı yerel rota/durak veritabanı — 118 EGO hattı ve ~5.900 durak OpenStreetMap'ten içe aktarıldı (© OpenStreetMap katkıcıları, ODbL lisansı). `tools/fetch_ego_routes.py` script'i ile veri güncellenebilir.
-- **Test:** Durak eşleştirme motoru (`StopMatcher`) saf Kotlin'dir ve birim testlerle doğrulanır (`app/src/test`)
+- **Harita:** osmdroid (OpenStreetMap — API anahtarı gerektirmez; uygulama içi ODbL atıfı gösterilir)
+- **Veri:** JSON tabanlı yerel/çevrimdışı rota-durak veritabanı — 118 EGO hattı ve ~5.900 durak OpenStreetMap'ten içe aktarıldı (© OpenStreetMap katkıcıları, ODbL lisansı). `tools/fetch_ego_routes.py` ile yeniden üretilebilir. **Veri gönüllü katkıya dayalıdır, resmî değildir.**
+- **Test & CI:** `StopMatcher` ve `NavigationAnnouncer` saf Kotlin'dir ve birim testlerle doğrulanır (24 test); her push'ta GitHub Actions build + test + lint çalıştırır
+- **Gizlilik:** Kişisel veriler cihazdan çıkmaz; uygulama içi KVKK aydınlatma metni bulunur
 
 ## 🚀 Kurulum
 1. Projeyi klonlayın: `git clone https://github.com/mmirac123/YolArkadasim.git`
