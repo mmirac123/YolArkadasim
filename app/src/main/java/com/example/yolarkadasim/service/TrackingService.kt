@@ -68,12 +68,11 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     // State
     private var prevIdx = -1
-    private var lastAnnouncedNextIdx = -1
-    private var lastAnnouncedLeavingPreDest = false
-    private var hasAnnouncedTargetReminder = false
-    private var hasAnnouncedArrival = false
     private var isStartStopConfirmed = false
     private var startStopDetectionCount = 0
+
+    // Anons karar mantığı (saf, birim testli) — "ne zaman ineceğiniz durak geldi"
+    private val announcer = NavigationAnnouncer()
 
     private var startBatteryLevel: Int = -1
     private var sessionGpsDeviationSum = 0.0
@@ -202,10 +201,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     fun updateDestination(newDestIndex: Int) {
         destinationIndex = newDestIndex
-        hasAnnouncedTargetReminder = false
-        hasAnnouncedArrival = false
-        lastAnnouncedLeavingPreDest = false
-        lastAnnouncedNextIdx = -1
+        announcer.reset()
         selectedRoute?.stops?.getOrNull(newDestIndex)?.let {
             val notification = createNotification("Yeni Hedef: ${it.name}")
             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -221,10 +217,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         stopLons = lons
         
         prevIdx = -1
-        lastAnnouncedNextIdx = -1
-        lastAnnouncedLeavingPreDest = false
-        hasAnnouncedTargetReminder = false
-        hasAnnouncedArrival = false
+        announcer.reset()
         isStartStopConfirmed = false
         startStopDetectionCount = 0
         startStopIndex = -1
@@ -400,45 +393,41 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private fun processNavigationLogic(lat: Double, lon: Double, curIdx: Int, route: BusRoute, distToNext: Double) {
         val lats = stopLats ?: return
         val lons = stopLons ?: return
-        
+
         val nextIdx = if (destinationIndex >= curIdx) curIdx + 1 else curIdx - 1
         if (nextIdx in route.stops.indices) {
-            val nextStop = route.stops[nextIdx]
             // Mesafeyi 50 m'lik kovalara yuvarla: bildirim ancak anlamlı değişimde yenilensin
             val bucketedDist = (distToNext.toInt() / 50) * 50
-            updateNotification(getString(R.string.notif_next_stop, nextStop.name, bucketedDist))
-            if (distToNext <= 150.0 && lastAnnouncedNextIdx != nextIdx) {
-                if (nextIdx == destinationIndex) {
-                    speak(getString(R.string.tts_arriving, nextStop.name))
-                    vibrateDouble()
-                } else {
-                    speak(getString(R.string.tts_next_stop, nextStop.name), urgent = false)
+            updateNotification(getString(R.string.notif_next_stop, route.stops[nextIdx].name, bucketedDist))
+        }
+
+        // Mesafeleri native ile hesapla, kararı saf mantığa bırak
+        val preDest = if (destinationIndex > 0) destinationIndex - 1 else -1
+        val distToPreDest = if (curIdx == preDest) calculateDistance(lat, lon, lats[preDest], lons[preDest]) else Double.NaN
+        val distToDest = calculateDistance(lat, lon, lats[destinationIndex], lons[destinationIndex])
+
+        val cues = announcer.evaluate(curIdx, destinationIndex, route.stops.size, distToNext, distToPreDest, distToDest)
+        for (cue in cues) {
+            when (cue) {
+                NavCue.NEXT_STOP -> {
+                    speak(getString(R.string.tts_next_stop, route.stops[nextIdx].name), urgent = false)
                     vibrateShort()
                 }
-                lastAnnouncedNextIdx = nextIdx
+                NavCue.APPROACHING_DESTINATION -> {
+                    speak(getString(R.string.tts_arriving, route.stops[nextIdx].name))
+                    vibrateDouble()
+                }
+                NavCue.PREPARE_TO_EXIT -> speak(getString(R.string.tts_prepare_to_exit))
+                NavCue.LEAVING_PRE_DESTINATION -> {
+                    speak(getString(R.string.tts_next_is_destination))
+                    vibrateDouble()
+                }
+                NavCue.ARRIVED -> {
+                    speak(getString(R.string.tts_arrived_get_off))
+                    vibrateArrival()
+                    updateNotification(getString(R.string.notif_arrived))
+                }
             }
-            if (nextIdx == destinationIndex && distToNext <= 80.0 && !hasAnnouncedTargetReminder) {
-                speak(getString(R.string.tts_prepare_to_exit))
-                hasAnnouncedTargetReminder = true
-            }
-        }
-
-        val preDest = if (destinationIndex > 0) destinationIndex - 1 else -1
-        if (curIdx == preDest) {
-            val d = calculateDistance(lat, lon, lats[preDest], lons[preDest])
-            if (d > 50.0 && !lastAnnouncedLeavingPreDest) {
-                speak(getString(R.string.tts_next_is_destination))
-                vibrateDouble()
-                lastAnnouncedLeavingPreDest = true
-            }
-        }
-
-        val distToDest = calculateDistance(lat, lon, lats[destinationIndex], lons[destinationIndex])
-        if (curIdx == destinationIndex && distToDest < 35.0 && !hasAnnouncedArrival) {
-            speak(getString(R.string.tts_arrived_get_off))
-            vibrateArrival()
-            hasAnnouncedArrival = true
-            updateNotification(getString(R.string.notif_arrived))
         }
     }
 
