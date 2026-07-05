@@ -45,6 +45,12 @@
     <string name="cd_recent_dest">Son hedefiniz: %1$s, hat %2$s. Seçmek için dokunun.</string>
     <string name="tts_recent_dest_selected">Son hedefiniz seçildi: %1$s.</string>
 
+    <!-- Onboarding (first-launch permission rationale) -->
+    <string name="onboarding_title">Yol Arkadaşım\'a\nHoş Geldiniz</string>
+    <string name="onboarding_body">Bu uygulama, otobüs yolculuğunuz boyunca sizi sesli olarak yönlendirir ve ineceğiniz durak geldiğinde uyarır.\n\nDoğru çalışabilmesi için birkaç izne ihtiyacı var:\n\n• Konum: Nerede olduğunuzu bilip durakları zamanında haber vermek için.\n\n• Mikrofon: Gitmek istediğiniz durağı sesle söyleyebilmeniz için.\n\n• Bildirim: Telefon cebinizdeyken bile uyarıları gösterebilmek için.\n\nHiçbir bilginiz paylaşılmaz; her şey telefonunuzda kalır.</string>
+    <string name="onboarding_button">ANLADIM, DEVAM ET</string>
+    <string name="cd_onboarding_button">İzinleri ver ve uygulamaya başla</string>
+
     <!-- Battery Optimization -->
     <string name="battery_opt_title">Kesintisiz Takip</string>
     <string name="battery_opt_message">Bazı telefonlar pil tasarrufu için uygulamayı arka planda durdurabilir; bu durumda otobüsteyken sesli uyarılar kesilir. Kesintisiz çalışması için pil optimizasyonunu kapatmanız önerilir.</string>

@@ -16,6 +16,7 @@ class SettingsStore(context: Context) {
         const val KEY_SPEECH_RATE = "speech_rate"
         const val KEY_EMERGENCY_CONTACT = "emergency_contact"
         const val KEY_BATTERY_PROMPTED = "battery_opt_prompted"
+        const val KEY_ONBOARDED = "onboarded"
     }
 
     fun isModernModePreferred(): Boolean = prefs.getBoolean(KEY_STARTUP_MODE, false) // Default to Kolay Mod (false)
@@ -38,4 +39,8 @@ class SettingsStore(context: Context) {
     /** Pil optimizasyonu muafiyeti bir kez sorulur; kullanıcıyı rahatsız etmemek için. */
     fun hasBatteryPromptShown(): Boolean = prefs.getBoolean(KEY_BATTERY_PROMPTED, false)
     fun markBatteryPromptShown() = prefs.edit().putBoolean(KEY_BATTERY_PROMPTED, true).apply()
+
+    /** İlk açılış tanıtım/izin ekranı gösterildi mi. */
+    fun hasOnboarded(): Boolean = prefs.getBoolean(KEY_ONBOARDED, false)
+    fun markOnboarded() = prefs.edit().putBoolean(KEY_ONBOARDED, true).apply()
 }

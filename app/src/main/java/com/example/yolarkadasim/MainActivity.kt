@@ -169,8 +169,9 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             settingsStore = SettingsStore(this)
             speechManager = SpeechManager(this, settingsStore, ::processVoiceCommand, ::speakMessage)
             speechManager.onTtsReady = {
-                // Kolay modda ve rehber açıksa açılışta yönergeyi seslendir
-                if (!settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
+                // Kolay modda ve rehber açıksa açılışta yönergeyi seslendir.
+                // İlk açılışta onboarding konuştuğu için burada susulur (çift TTS olmasın).
+                if (settingsStore.hasOnboarded() && !settingsStore.isModernModePreferred() && settingsStore.isVoiceGuidanceEnabled()) {
                     binding.root.postDelayed({
                         if (!isFinishing && !isDestroyed) speakGuidedWalkthrough()
                     }, 1000)
@@ -189,7 +190,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
             setupTrackingButtons()
             setupVoiceCommands()
             setupSettingsPage()
-            requestPermissions()
+            // İlk açılışta izin gerekçe ekranını göster; izinleri o ister.
+            // Sonraki açılışlarda eksik izin varsa sessizce yeniden iste.
+            if (!settingsStore.hasOnboarded()) {
+                startActivity(Intent(this, OnboardingActivity::class.java))
+            } else {
+                requestPermissions()
+            }
         } catch (e: Exception) { Log.e("MainActivity", "CRITICAL ONCREATE FAIL", e) }
     }
 
