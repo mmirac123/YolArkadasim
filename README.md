@@ -50,7 +50,7 @@ Gürültülü otobüste anons duyulmayabilir; kritik anlar ayırt edilebilir tit
 - **Dil:** Kotlin (UI & Service), C++ (Native Engine: Kalman filtresi, navigasyon FSM)
 - **Konum:** Google Play Services Fused Location Provider
 - **Harita:** osmdroid (OpenStreetMap — API Key gerektirmez)
-- **Veri:** JSON tabanlı yerel rota/durak veritabanı (EGO Stop IDs uyumlu)
+- **Veri:** JSON tabanlı yerel rota/durak veritabanı — 118 EGO hattı ve ~5.900 durak OpenStreetMap'ten içe aktarıldı (© OpenStreetMap katkıcıları, ODbL lisansı). `tools/fetch_ego_routes.py` script'i ile veri güncellenebilir.
 - **Test:** Durak eşleştirme motoru (`StopMatcher`) saf Kotlin'dir ve birim testlerle doğrulanır (`app/src/test`)
 
 ## 🚀 Kurulum

@@ -171,6 +171,9 @@ class MainActivity : AppCompatActivity(), TextToSpeech.OnInitListener, SensorEve
             binding = ActivityMainBinding.inflate(layoutInflater)
             setContentView(binding.root)
             routeRepository = RouteRepository(this)
+            // 119 hatlık JSON'u (~700 KB) ilk dokunuşta UI thread'inde parse etmemek
+            // için önbelleği arka planda ısıt
+            Thread { try { routeRepository.getAllRoutes() } catch (e: Exception) { Log.e("MainActivity", "Route preload fail", e) } }.start()
             recentDestStore = RecentDestinationStore(this)
             statsStore = StatsStore(this)
             settingsStore = SettingsStore(this)
