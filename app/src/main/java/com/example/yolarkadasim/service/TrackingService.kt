@@ -11,6 +11,7 @@ import android.os.Binder
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
 import android.os.IBinder
 import android.os.Looper
 import android.os.VibrationEffect
@@ -52,6 +53,14 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var locationCallback: LocationCallback? = null
 
+    // Konum fix'leri + JNI navigasyon motoru işleme MAIN thread yerine bu ayrık
+    // thread'de koşar: yavaş bir native tik UI thread'ini bloklayıp ANR yaratmasın.
+    // İvmeölçer birikimi de aynı thread'e alındı; böylece accel toplamlarına
+    // iki thread'den erişim (veri yarışı) ortadan kalkar.
+    private lateinit var engineThread: HandlerThread
+    private lateinit var engineHandler: Handler
+    private val mainHandler = Handler(Looper.getMainLooper())
+
     private lateinit var sensorManager: SensorManager
     private var linearAccelSensor: Sensor? = null
 
@@ -66,6 +75,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     private var selectedRoute: BusRoute? = null
     private var startStopIndex: Int = -1
+    // MAIN thread yazar (updateDestination), motor thread okur → volatile şart
+    @Volatile
     private var destinationIndex: Int = -1
     private var stopLats: DoubleArray? = null
     private var stopLons: DoubleArray? = null
@@ -90,6 +101,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     // GPS fix bekleme uyarısı: her şey açık ama sinyal gelmiyorsa (kapalı alan)
     // kullanıcı sonsuz sessizlikte kalmasın
+    // Motor thread yazar (processLocation), MAIN okur (gpsWaitRunnable) → volatile
+    @Volatile
     private var hasReceivedFix = false
     private val gpsWaitHandler = Handler(Looper.getMainLooper())
     private val gpsWaitRunnable = Runnable {
@@ -101,6 +114,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     var onUpdate: ((Double, Double, Int, Double, Int, Double, Int) -> Unit)? = null
 
+    @Volatile
     var isTrackingActive = false
         private set
     val currentRoute: BusRoute? get() = selectedRoute
@@ -116,8 +130,21 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         const val EXTRA_ROUTE_ID = "extra_route_id"
         const val EXTRA_DEST_IDX = "extra_dest_idx"
 
+        // Native kütüphane yüklenemezse (yanlış ABI, bozuk derleme) init bloğundaki
+        // UnsatisfiedLinkError sınıf yüklenirken sert çökme yaratıyordu. Yakalayıp
+        // bayrağa alıyoruz; startTracking bunu kontrol edip nazikçe uyararak çıkıyor.
+        @Volatile
+        var nativeAvailable: Boolean = false
+            private set
+
         init {
-            System.loadLibrary("yolarkadasim")
+            nativeAvailable = try {
+                System.loadLibrary("yolarkadasim")
+                true
+            } catch (e: UnsatisfiedLinkError) {
+                Log.e(TAG, "Native lib load failed", e)
+                false
+            }
         }
     }
 
@@ -139,6 +166,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
     override fun onCreate() {
         super.onCreate()
+        engineThread = HandlerThread("nav-engine").apply { start() }
+        engineHandler = Handler(engineThread.looper)
         settingsStore = SettingsStore(this)
         tts = TextToSpeech(this, this)
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
@@ -166,7 +195,8 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         linearAccelSensor?.let {
             // UI frekansı (~60ms) Kalman girdisi için yeterli; GAME (~20ms) 3 kat
             // fazla uyandırma yapıp batarya tüketiyordu — veriler zaten ortalanıyor.
-            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+            // engineHandler ile motor thread'inde toplanır (konum işlemeyle aynı thread).
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI, engineHandler)
         }
 
         // Sistem servisi öldürüp intent'i YENİDEN TESLİM ettiyse yolculuğu kaldığı
@@ -221,6 +251,14 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
     }
 
     fun startTracking(route: BusRoute, destIdx: Int, lats: DoubleArray, lons: DoubleArray) {
+        // Native motor yoksa takip anlamsız (tüm mesafe/FSM native): sert çökme
+        // yerine kullanıcıyı sesli uyar ve servisi kapat.
+        if (!nativeAvailable) {
+            Log.e(TAG, "startTracking aborted: native engine unavailable")
+            speak(getString(R.string.tts_engine_unavailable))
+            stopTracking()
+            return
+        }
         isTrackingActive = true
         selectedRoute = route
         destinationIndex = destIdx
@@ -260,12 +298,15 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
 
         try {
             fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                // lastLocation başarı geri çağrısı MAIN'de gelir; motor durumuna
+                // yalnızca motor thread'inden dokunulsun diye oraya post ediyoruz.
                 if (loc != null && startStopIndex == -1) {
-                    processLocation(loc)
+                    engineHandler.post { processLocation(loc) }
                 }
             }
         } catch (e: SecurityException) {
             Log.e(TAG, "Permission error", e)
+            notifyPermissionMissing()
         }
 
         beginLocationUpdates()
@@ -309,9 +350,11 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         }
         
         try {
-            fusedLocationClient.requestLocationUpdates(request, locationCallback!!, Looper.getMainLooper())
+            // Callback'ler motor thread'inde teslim edilsin (JNI işleme MAIN'i bloklamasın)
+            fusedLocationClient.requestLocationUpdates(request, locationCallback!!, engineThread.looper)
         } catch (e: SecurityException) {
             Log.e(TAG, "Location permission missing", e)
+            notifyPermissionMissing()
         }
     }
 
@@ -401,7 +444,10 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
                 distToNext = calculateDistance(lat, lon, ns.lat, ns.lon)
             }
 
-            onUpdate?.invoke(lat, lon, curIdx, deviation, direction, distToNext, startStopIndex)
+            // UI geri çağrısı (harita/Activity) yalnızca MAIN thread'de çalışmalı
+            onUpdate?.let { cb ->
+                mainHandler.post { cb(lat, lon, curIdx, deviation, direction, distToNext, startStopIndex) }
+            }
             processNavigationLogic(lat, lon, curIdx, route, distToNext)
             prevIdx = curIdx
         } catch (e: Exception) { Log.e(TAG, "processLocation error", e) }
@@ -514,6 +560,18 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
             .build()
     }
 
+    /**
+     * Konum izni yoksa (SecurityException) eskiden yalnızca loglanıyordu: kör
+     * kullanıcı çalışan bir bildirim görüp neden sessiz kaldığını anlamıyordu.
+     * Artık hem sesli hem bildirimle neden takibin ilerlemediği bildirilir.
+     */
+    private fun notifyPermissionMissing() {
+        val msg = getString(R.string.tts_location_permission_needed)
+        speak(msg)
+        vibrateWarning()
+        updateNotification(msg)
+    }
+
     private var lastNotificationText: String? = null
 
     private fun updateNotification(content: String) {
@@ -532,6 +590,7 @@ class TrackingService : Service(), TextToSpeech.OnInitListener, SensorEventListe
         try { locationCallback?.let { fusedLocationClient.removeLocationUpdates(it) } } catch (e: Exception) { Log.e(TAG, "Loc cleanup fail", e) }
         try { sensorManager.unregisterListener(this) } catch (e: Exception) { Log.e(TAG, "Sensor cleanup fail", e) }
         tts?.shutdown()
+        if (::engineThread.isInitialized) engineThread.quitSafely()
         super.onDestroy()
     }
 

@@ -25,7 +25,7 @@
 - **Dinamik GPS Örnekleme:** Hareket hızına göre (dururken 2 sn, hızlıyken 1 sn) batarya ve hassasiyet dengesi.
 - **Otomatik Biniş Algılama:** Takip başladığında en yakın durağı tespit eder; duraktan uzaksanız sizi durağa yönlendirir.
 - **Yanlış Yön Uyarısı:** Ters yöne gidiş algılanınca sesli anons + güçlü titreşim + bildirim.
-- **Kesinti Toleransı:** Sistem serviyi kapatsa bile yolculuk otomatik geri yüklenir ve "Takip yeniden başlatıldı" anonsuyla devam eder. Uygulamaya geri dönüldüğünde arayüz servisteki gerçek durumla senkronize edilir.
+- **Kesinti Toleransı:** Sistem serviyi kapatsa bile yolculuk otomatik geri yüklenir ve "Takip yeniden başlatıldı" anonsuyla devam eder. Yolculuk sırasında hedef değiştirilirse bu güncel hedef de geri yüklemeye yansıtılır (eski hedefe dönülmez). Uygulamaya geri dönüldüğünde arayüz servisteki gerçek durumla senkronize edilir.
 
 ### 📳 Haptik (Titreşim) Geri Bildirim
 Gürültülü otobüste anons duyulmayabilir; kritik anlar ayırt edilebilir titreşim ritimleriyle de bildirilir:
@@ -48,6 +48,8 @@ Gürültülü otobüste anons duyulmayabilir; kritik anlar ayırt edilebilir tit
 
 ## ⚙️ Arka Plan ve Güvenlik
 - **Foreground Service:** Ekran kilitliyken kesintisiz GPS takibi ve anonslar; Android 13+ bildirim izni açılışta istenir.
+- **Ayrık Motor Thread'i:** Konum işleme ve C++ navigasyon motoru (JNI) çağrıları ayrı bir arka plan thread'inde koşar; ağır bir native tik ana thread'i bloklamaz (ANR koruması). İvmeölçer birikimi de aynı thread'e alınarak veri yarışı önlenir.
+- **Nazik Bozulma:** Native motor cihazda yüklenemezse uygulama sert çökme yerine kullanıcıyı sesli uyarır. Konum izni eksikse takip sessizce başarısız olmaz; sesli anons, titreşim ve bildirimle bilgilendirir.
 - **Asgari İzin İlkesi:** Arka plan konumu veya depolama izni istenmez; yardım butonu arama iznine ihtiyaç duymaz.
 
 ## 🛠 Teknik Mimari

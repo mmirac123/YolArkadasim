@@ -33,6 +33,7 @@
     <string name="tts_wrong_direction">Dikkat! Yanlış yöne gidiyorsunuz</string>
     <string name="tts_correct_direction">Doğru yönde ilerliyorsunuz</string>
     <string name="tts_init_failed">Sesli rehber başlatılamadı</string>
+    <string name="tts_engine_unavailable">Navigasyon motoru bu cihazda yüklenemedi. Takip başlatılamıyor.</string>
     <string name="tts_next_stop">Sonraki durağınız: %1$s</string>
     <string name="tts_arriving">Dikkat! İneceğiniz durağa yaklaşıyorsunuz: %1$s</string>
     <string name="tts_arrived">İneceğiniz durağa geldiniz!</string>

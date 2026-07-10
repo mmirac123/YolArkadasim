@@ -508,6 +508,13 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
         recentDestStore.save(route, matchedStop, matchedIdx)
         if (isTracking) {
             trackingService?.updateDestination(matchedIdx)
+            // Redelivery intent'ini tazele: servis sistem tarafından öldürülüp
+            // yeniden başlatılırsa yolculuk ESKİ değil GÜNCEL hedefle kurulsun.
+            val refresh = Intent(this, TrackingService::class.java).apply {
+                putExtra(TrackingService.EXTRA_ROUTE_ID, route.routeId)
+                putExtra(TrackingService.EXTRA_DEST_IDX, matchedIdx)
+            }
+            ContextCompat.startForegroundService(this, refresh)
             speakMessage(getString(R.string.tts_new_destination_set, matchedStop.name))
         } else {
             if (announceRoute) speakMessage(getString(R.string.tts_destination_selected_with_route, route.routeId, matchedStop.name))
@@ -597,10 +604,17 @@ class MainActivity : AppCompatActivity(), SensorEventListener {
 
     private fun startTracking() {
         try {
+            // Rota seçili değilse başlatma: null routeId'li extra, REDELIVER
+            // kurtarmasını sessizce bozar (routeId null → restore atlanır).
+            val route = selectedRoute
+            if (route == null || destinationStopIndex < 0) {
+                Log.e("MainActivity", "startTracking aborted: no route/destination")
+                return
+            }
             // Extras, servis sistem tarafından öldürülüp yeniden başlatılırsa (REDELIVER)
             // yolculuğun kaldığı yerden kurulmasını sağlar.
             val intent = Intent(this, TrackingService::class.java).apply {
-                putExtra(TrackingService.EXTRA_ROUTE_ID, selectedRoute?.routeId)
+                putExtra(TrackingService.EXTRA_ROUTE_ID, route.routeId)
                 putExtra(TrackingService.EXTRA_DEST_IDX, destinationStopIndex)
             }
             ContextCompat.startForegroundService(this, intent)
